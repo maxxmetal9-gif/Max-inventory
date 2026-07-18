@@ -221,12 +221,14 @@ export default function WarehouseStock() {
     setAddingItem(true);
     try {
       const productId = newItem.name.trim().toUpperCase().replace(/\s+/g, "-");
-      const { data: inserted, error } = await supabase.from("products").insert([{
+      const payload = {
         product_id: productId,
         product_name: newItem.name.trim(),
         unit: newItem.unit || "Pcs",
         low_stock_alert: Number(newItem.low_stock_alert || 0),
-      }]).select("*").single();
+      };
+      console.log("WarehouseStock.jsx add product payload:", JSON.stringify(payload));
+      const { data: inserted, error } = await supabase.from("products").insert([payload]).select("*").single();
       if (error) {
         console.error("WarehouseStock.jsx - add product error:", error);
         throw error;

@@ -51,6 +51,12 @@ async function fetchAllRows(baseQuery, pageSize = 1000) {
   return all;
 }
 
+const normalizeProductRow = (row = {}) => ({
+  ...row,
+  productid: row.product_id ?? row.productid ?? "",
+  productname: row.product_name ?? row.productname ?? "",
+});
+
 const cardStyle = {
   background: MM.white,
   border: `1px solid ${MM.lightSilver}`,
@@ -123,8 +129,8 @@ export default function Products() {
   const loadProducts = async () => {
     const { data, error } = await supabase
       .from("products")
-      .select("*")
-      .order("productname", { ascending: true });
+      .select("id, product_id, product_name, low_stock_alert, high_stock_alert")
+      .order("product_name", { ascending: true });
 
     if (error) {
       console.error("Products.jsx - load products error:", error);
@@ -132,7 +138,7 @@ export default function Products() {
       return;
     }
 
-    setProducts(data || []);
+    setProducts((data || []).map(normalizeProductRow));
   };
 
   const loadLocations = async () => {
@@ -215,13 +221,14 @@ export default function Products() {
 
     setSaving(true);
 
-    const { error } = await supabase.from("products").insert([
-      {
-        productid: form.productid.trim() || null,
-        productname: form.productname.trim(),
-        low_stock_alert: form.low_stock_alert ? Number(form.low_stock_alert) : null,
-      },
-    ]);
+    const payload = {
+      product_id: form.productid.trim() || null,
+      product_name: form.productname.trim(),
+      low_stock_alert: form.low_stock_alert ? Number(form.low_stock_alert) : null,
+    };
+    console.log("Products.jsx add product payload:", JSON.stringify(payload));
+
+    const { error } = await supabase.from("products").insert([payload]);
 
     setSaving(false);
 
@@ -258,13 +265,16 @@ export default function Products() {
   };
 
   const saveEdit = async (id) => {
+    const payload = {
+      product_name: editForm.productname,
+      product_id: editForm.productid || null,
+      low_stock_alert: editForm.low_stock_alert ? Number(editForm.low_stock_alert) : null,
+    };
+    console.log("Products.jsx edit product payload:", JSON.stringify(payload));
+
     const { error } = await supabase
       .from("products")
-      .update({
-        productname: editForm.productname,
-        productid: editForm.productid || null,
-        low_stock_alert: editForm.low_stock_alert ? Number(editForm.low_stock_alert) : null,
-      })
+      .update(payload)
       .eq("id", id);
 
     if (error) {
@@ -436,11 +446,17 @@ export default function Products() {
     setBulkSaving(true);
     const chunk = 50;
 
-    const productPayloads = bulkRows.map(({ _stock, _location, ...rest }) => rest);
+    const productPayloads = bulkRows.map(({ _stock, _location, ...rest }) => ({
+      product_id: rest.productid ?? rest.product_id ?? null,
+      product_name: rest.productname ?? rest.product_name ?? null,
+      low_stock_alert: rest.low_stock_alert ?? rest.lowstockalert ?? null,
+    })).filter((row) => row.product_name || row.product_id);
 
     for (let i = 0; i < productPayloads.length; i += chunk) {
-      const { error } = await supabase.from("products").upsert(productPayloads.slice(i, i + chunk), {
-        onConflict: "productname",
+      const payload = productPayloads.slice(i, i + chunk);
+      console.log("Products.jsx bulk upsert payload:", JSON.stringify(payload));
+      const { error } = await supabase.from("products").upsert(payload, {
+        onConflict: "product_id",
       });
       if (error) {
         console.error("Products.jsx - bulk upsert products error:", error);

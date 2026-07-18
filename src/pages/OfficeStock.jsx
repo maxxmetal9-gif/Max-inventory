@@ -271,13 +271,15 @@ export default function OfficeStock() {
     setAddingItem(true);
     try {
       const productId = newItem.name.trim().toUpperCase().replace(/\s+/g, "-");
-      const { data: inserted, error } = await supabase.from("products").insert([{
+      const payload = {
         product_id: productId,
         product_name: newItem.name.trim(),
         unit: newItem.unit || "Pcs",
         low_stock_alert: Number(newItem.low_stock_alert || 0),
         high_stock_alert: Number(newItem.high_stock_alert || 0),
-      }]).select("*").single();
+      };
+      console.log("OfficeStock.jsx add product payload:", JSON.stringify(payload));
+      const { data: inserted, error } = await supabase.from("products").insert([payload]).select("*").single();
       if (error) {
         console.error("OfficeStock.jsx - add product error:", error);
         throw error;
@@ -391,20 +393,24 @@ export default function OfficeStock() {
           throw existingError;
         }
         if (existing) {
-          const { error: updateError } = await supabase.from("products").update({
+          const payload = {
             product_name: row.name.trim(), unit: row.unit || "Pcs",
             low_stock_alert: row.low_stock_alert || 0, high_stock_alert: row.high_stock_alert || 0,
-          }).eq("id", existing.id);
+          };
+          console.log("OfficeStock.jsx update product payload:", JSON.stringify(payload));
+          const { error: updateError } = await supabase.from("products").update(payload).eq("id", existing.id);
           if (updateError) {
             console.error("OfficeStock.jsx - update product error:", updateError);
             throw updateError;
           }
           productDbId = existing.id; updated++;
         } else {
-          const { data: inserted, error: insErr } = await supabase.from("products").insert([{
+          const payload = {
             product_id: row.product_id, product_name: row.name.trim(), unit: row.unit || "Pcs",
             low_stock_alert: row.low_stock_alert || 0, high_stock_alert: row.high_stock_alert || 0,
-          }]).select("id").single();
+          };
+          console.log("OfficeStock.jsx insert product payload:", JSON.stringify(payload));
+          const { data: inserted, error: insErr } = await supabase.from("products").insert([payload]).select("id").single();
           if (insErr) throw insErr;
           productDbId = inserted.id; added++;
         }
