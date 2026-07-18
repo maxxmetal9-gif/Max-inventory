@@ -17,7 +17,10 @@ export default function QRPrint() {
         .select("*")
         .order("product_name", { ascending: true });
 
-      if (error) throw error;
+      if (error) {
+        console.error("QRPrint.jsx - products query error:", error);
+        throw error;
+      }
       setProducts(data || []);
     } catch (err) {
       console.error("Error fetching products:", err.message);

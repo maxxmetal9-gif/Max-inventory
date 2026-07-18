@@ -86,7 +86,7 @@ export default function Products() {
   const [form, setForm] = useState({
     productid: "",
     productname: "",
-    lowstockalert: "",
+    low_stock_alert: "",
   });
 
   const [editingId, setEditingId] = useState(null);
@@ -121,9 +121,17 @@ export default function Products() {
   };
 
   const loadProducts = async () => {
-    const data = await fetchAllRows(
-      supabase.from("products").select("*").order("productname", { ascending: true })
-    );
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("productname", { ascending: true });
+
+    if (error) {
+      console.error("Products.jsx - load products error:", error);
+      setProducts([]);
+      return;
+    }
+
     setProducts(data || []);
   };
 
@@ -211,19 +219,19 @@ export default function Products() {
       {
         productid: form.productid.trim() || null,
         productname: form.productname.trim(),
-        lowstockalert: form.lowstockalert ? Number(form.lowstockalert) : null,
+        low_stock_alert: form.low_stock_alert ? Number(form.low_stock_alert) : null,
       },
     ]);
 
     setSaving(false);
 
     if (error) {
-      console.error("Add product error:", error);
+      console.error("Products.jsx - add product error:", error);
       alert(error.message);
       return;
     }
 
-    setForm({ productid: "", productname: "", lowstockalert: "" });
+    setForm({ productid: "", productname: "", low_stock_alert: "" });
     setShowAddForm(false);
     await loadProducts();
   };
@@ -231,6 +239,7 @@ export default function Products() {
   const handleDelete = async (id) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) {
+      console.error("Products.jsx - delete product error:", error);
       alert(error.message);
       return;
     }
@@ -244,7 +253,7 @@ export default function Products() {
     setEditForm({
       productname: p.productname || "",
       productid: p.productid || "",
-      lowstockalert: p.lowstockalert || "",
+      low_stock_alert: p.low_stock_alert || "",
     });
   };
 
@@ -254,11 +263,12 @@ export default function Products() {
       .update({
         productname: editForm.productname,
         productid: editForm.productid || null,
-        lowstockalert: editForm.lowstockalert ? Number(editForm.lowstockalert) : null,
+        low_stock_alert: editForm.low_stock_alert ? Number(editForm.low_stock_alert) : null,
       })
       .eq("id", id);
 
     if (error) {
+      console.error("Products.jsx - save edit error:", error);
       alert(error.message);
       return;
     }
@@ -310,7 +320,7 @@ export default function Products() {
       Office: officeStock(p.id),
       Warehouse: warehouseStock(p.id),
       Total: totalStock(p.id),
-      LowAlert: p.lowstockalert || "",
+      LowAlert: p.low_stock_alert || "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -329,7 +339,7 @@ export default function Products() {
       officeStock(p.id),
       warehouseStock(p.id),
       totalStock(p.id),
-      p.lowstockalert || "—",
+      p.low_stock_alert || "—",
     ]);
 
     doc.setFillColor(15, 15, 16);
@@ -356,7 +366,7 @@ export default function Products() {
         productid: "MM-001",
         productname: "Example Product 25NB",
         stock: 100,
-        lowstockalert: 10,
+        low_stock_alert: 10,
         location: "warehouse",
       },
     ]);
@@ -390,11 +400,11 @@ export default function Products() {
             const stockNum = stockVal !== undefined && stockVal !== "" ? Number(stockVal) || 0 : null;
 
             const lowVal =
-              r.lowstockalert !== undefined
-                ? r.lowstockalert
-                : r.LowStockAlert !== undefined
-                ? r.LowStockAlert
-                : r["Low Stock Alert"];
+              r.low_stock_alert !== undefined
+                ? r.low_stock_alert
+                : r["Low Stock Alert"] !== undefined
+                ? r["Low Stock Alert"]
+                : undefined;
             const lowNum = lowVal !== undefined && lowVal !== "" ? Number(lowVal) || null : null;
 
             const locationName = String(r.location || r.Location || "").trim().toLowerCase() || null;
@@ -402,7 +412,7 @@ export default function Products() {
             return {
               productid: String(r.productid || r.ProductID || r["Product ID"] || "").trim() || null,
               productname,
-              lowstockalert: lowNum,
+              low_stock_alert: lowNum,
               _stock: stockNum,
               _location: locationName,
             };
@@ -433,6 +443,7 @@ export default function Products() {
         onConflict: "productname",
       });
       if (error) {
+        console.error("Products.jsx - bulk upsert products error:", error);
         setBulkSaving(false);
         alert(error.message);
         return;
@@ -442,7 +453,14 @@ export default function Products() {
     const rowsWithStock = bulkRows.filter((r) => r._stock !== null && r._stock > 0);
 
     if (rowsWithStock.length > 0) {
-      const freshProducts = await fetchAllRows(supabase.from("products").select("id, productname"));
+      const { data: freshProducts, error: freshProductsError } = await supabase.from("products").select("id, productname");
+      if (freshProductsError) {
+        console.error("Products.jsx - bulk refresh products error:", freshProductsError);
+        setBulkSaving(false);
+        alert(freshProductsError.message);
+        return;
+      }
+
       const nameToId = {};
       freshProducts.forEach((p) => {
         nameToId[p.productname] = p.id;
@@ -501,7 +519,7 @@ export default function Products() {
   }, [products, search]);
 
   const lowStockCount = useMemo(
-    () => products.filter((p) => p.lowstockalert && totalStock(p.id) <= Number(p.lowstockalert)).length,
+    () => products.filter((p) => p.low_stock_alert && totalStock(p.id) <= Number(p.low_stock_alert)).length,
     [products, totalStock]
   );
 
@@ -578,7 +596,7 @@ export default function Products() {
             </button>
           </div>
           <p className="text-xs mb-3" style={{ color: MM.gunmetal }}>
-            Upload Excel or CSV with columns <code>productid</code>, <code>productname</code>, <code>stock</code>, <code>lowstockalert</code>, <code>location</code>.
+            Upload Excel or CSV with columns <code>productid</code>, <code>productname</code>, <code>stock</code>, <code>low_stock_alert</code>, <code>location</code>.
           </p>
           <input
             ref={fileRef}
@@ -621,7 +639,7 @@ export default function Products() {
                         <td className="px-3 py-1.5 font-mono" style={{ color: MM.gunmetal }}>{r.productid || "—"}</td>
                         <td className="px-3 py-1.5 font-medium" style={{ color: MM.black }}>{r.productname}</td>
                         <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r._stock ?? "—"}</td>
-                        <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r.lowstockalert ?? "—"}</td>
+                        <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r.low_stock_alert ?? "—"}</td>
                         <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r._location || "—"}</td>
                       </tr>
                     ))}
@@ -675,8 +693,8 @@ export default function Products() {
               </label>
               <input
                 type="number"
-                value={form.lowstockalert}
-                onChange={(e) => setForm((f) => ({ ...f, lowstockalert: e.target.value }))}
+                value={form.low_stock_alert}
+                onChange={(e) => setForm((f) => ({ ...f, low_stock_alert: e.target.value }))}
                 placeholder="e.g. 10"
                 style={inputStyle}
               />
@@ -747,7 +765,7 @@ export default function Products() {
                   const office = officeStock(p.id);
                   const warehouse = warehouseStock(p.id);
                   const total = totalStock(p.id);
-                  const isLow = p.lowstockalert && total <= Number(p.lowstockalert);
+                  const isLow = p.low_stock_alert && total <= Number(p.low_stock_alert);
                   const isEditing = editingId === p.id;
 
                   return (
@@ -813,8 +831,8 @@ export default function Products() {
                         {isEditing ? (
                           <input
                             type="number"
-                            value={editForm.lowstockalert || ""}
-                            onChange={(e) => setEditForm((f) => ({ ...f, lowstockalert: e.target.value }))}
+                            value={editForm.low_stock_alert || ""}
+                            onChange={(e) => setEditForm((f) => ({ ...f, low_stock_alert: e.target.value }))}
                             style={{ ...inputStyle, width: 70, margin: "0 auto", padding: "6px 8px", textAlign: "center", fontSize: 12 }}
                           />
                         ) : (
@@ -822,7 +840,7 @@ export default function Products() {
                             className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
                             style={{ background: MM.smoke, color: MM.gunmetal }}
                           >
-                            {p.lowstockalert || "—"}
+                            {p.low_stock_alert || "—"}
                           </span>
                         )}
                       </td>

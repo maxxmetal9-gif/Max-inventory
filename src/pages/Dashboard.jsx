@@ -39,14 +39,14 @@ export default function Dashboard() {
   const [locations, setLocations] = useState([]);
   const [stockSummary, setStockSummary] = useState({});
 
-  const COLORS = ["#2a2d33", "#6f7682", "#b8bec7", "#8c949e", "#444b55", "#cfd4da"];
+  const COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#EC4899", "#F97316", "#8B5CF6"];
   const CATEGORY_COLORS = {
-    "Seamless Pipe": "#2a2d33",
-    "Polish Pipe": "#6f7682",
-    "NB Pipe": "#8c949e",
-    "Sheets": "#b8bec7",
-    "Non-Polish Pipe": "#444b55",
-    "Others": "#cfd4da"
+    "Seamless Pipe":   "#F59E0B",
+    "Polish Pipe":     "#3B82F6",
+    "NB Pipe":         "#10B981",
+    "Sheets":          "#EC4899",
+    "Non-Polish Pipe": "#F97316",
+    "Others":          "#8B5CF6"
   };
 
   useEffect(() => {
@@ -116,9 +116,12 @@ export default function Dashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const { data: productsData } = await supabase
+      const { data: productsData, error: productsError } = await supabase
         .from("products")
         .select("id, product_id, product_name, low_stock_alert, high_stock_alert");
+      if (productsError) {
+        console.error("Dashboard.jsx - products query error:", productsError);
+      }
 
       const { data: recentTrans } = await supabase
         .from("transactions")
@@ -330,39 +333,36 @@ export default function Dashboard() {
   const categoryColor = selectedCategory ? (CATEGORY_COLORS[selectedCategory] || "#8B5CF6") : "#8B5CF6";
 
   return (
-    <div className="min-h-screen bg-[#eef1f4] p-6 md:p-8">
+    <div className="p-6 md:p-8">
       {/* HEADER */}
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#d9dde3] bg-[#ffffff] px-6 py-5 shadow-[0_10px_30px_rgba(15,15,16,0.05)]">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-[#5f6670]">Maxx Metals</p>
-          <h1 className="text-3xl font-bold tracking-tight text-[#0f0f10]">Warehouse Intelligence</h1>
-        </div>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
+        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Warehouse Intelligence</h1>
       </div>
 
       {/* AI Assistant */}
-      <div className="mb-8 rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-6 shadow-[0_10px_30px_rgba(15,15,16,0.05)]">
-        <h2 className="mb-3 flex items-center gap-2 text-lg font-bold text-[#0f0f10]">✨ Maxx Metals AI Assistant</h2>
+      <div className="bg-white p-6 rounded-2xl shadow-sm border border-blue-100 mb-8">
+        <h2 className="text-lg font-bold text-blue-600 mb-3 flex items-center gap-2">✨ Maxx Metals AI Assistant</h2>
         <div className="flex gap-2">
           <input
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             placeholder="Ask anything about your stock..."
-            className="flex-1 rounded-2xl border border-[#d9dde3] bg-[#f7f8fa] p-3 text-sm text-[#1b1c1f] outline-none transition-all placeholder:text-[#5f6670] focus:border-[#1b1c1f]"
+            className="flex-1 p-3 border rounded-xl outline-none focus:border-blue-500 transition-all text-sm"
           />
-          <button onClick={askGemini} disabled={isAsking} className="rounded-2xl bg-[#0f0f10] px-6 py-3 text-sm font-bold text-white transition-all hover:bg-[#1b1c1f] disabled:opacity-50">
+          <button onClick={askGemini} disabled={isAsking} className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-700 transition-all disabled:opacity-50 text-sm">
             {isAsking ? "Thinking..." : "Analyze"}
           </button>
         </div>
         {aiResponse && (
           <div className="mt-4 space-y-3">
-            <div className="flex items-center justify-between rounded-t-2xl border-x border-t border-[#d9dde3] bg-[#f7f8fa] p-3">
-              <span className="text-xs font-bold uppercase tracking-[0.3em] text-[#1b1c1f]">Analysis Results</span>
+            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-t-xl border-x border-t border-blue-100">
+              <span className="text-xs font-bold text-blue-600 uppercase">Analysis Results</span>
               <div className="flex gap-2">
-                <button onClick={() => exportAiData('excel')} className="rounded-lg bg-green-600 px-3 py-1 text-xs font-bold text-white">📥 Excel</button>
-                <button onClick={() => exportAiData('pdf')} className="rounded-lg bg-red-600 px-3 py-1 text-xs font-bold text-white">📄 PDF</button>
+                <button onClick={() => exportAiData('excel')} className="bg-green-600 text-white px-3 py-1 rounded-lg text-xs font-bold">📥 Excel</button>
+                <button onClick={() => exportAiData('pdf')} className="bg-red-600 text-white px-3 py-1 rounded-lg text-xs font-bold">📄 PDF</button>
               </div>
             </div>
-            <div className="overflow-x-auto rounded-b-2xl border border-[#d9dde3] bg-[#ffffff] p-4 text-sm whitespace-pre-wrap text-[#1b1c1f] shadow-inner">
+            <div className="p-4 bg-white rounded-b-xl border border-blue-100 text-sm text-gray-700 whitespace-pre-wrap shadow-inner overflow-x-auto">
               {aiResponse}
             </div>
           </div>
@@ -370,55 +370,55 @@ export default function Dashboard() {
       </div>
 
       {/* KPI CARDS */}
-      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <div className="rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-5 shadow-[0_10px_30px_rgba(15,15,16,0.04)]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.3em] text-[#5f6670]">Products</p>
-          <p className="text-3xl font-black text-[#0f0f10]">{stats.totalProducts}</p>
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Products</p>
+          <p className="text-3xl font-black text-blue-600">{stats.totalProducts}</p>
         </div>
-        <div className="rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-5 shadow-[0_10px_30px_rgba(15,15,16,0.04)]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.3em] text-[#5f6670]">Total Stock</p>
+        <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Total Stock</p>
           <p className="text-3xl font-black text-green-600">{stats.totalStock}</p>
         </div>
-        <div onClick={() => setModalType('low')} className="cursor-pointer rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-5 shadow-[0_10px_30px_rgba(15,15,16,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,15,16,0.08)]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.3em] text-red-500">Low Stock</p>
+        <div onClick={() => setModalType('low')} className="bg-white p-5 rounded-2xl shadow-sm border border-red-100 cursor-pointer hover:shadow-md transition-shadow">
+          <p className="text-xs font-bold text-red-400 uppercase tracking-wider mb-1">Low Stock</p>
           <p className="text-3xl font-black text-red-600">{stats.lowAlerts}</p>
         </div>
-        <div onClick={() => setModalType('high')} className="cursor-pointer rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-5 shadow-[0_10px_30px_rgba(15,15,16,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,15,16,0.08)]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.3em] text-orange-500">High Stock</p>
+        <div onClick={() => setModalType('high')} className="bg-white p-5 rounded-2xl shadow-sm border border-orange-100 cursor-pointer hover:shadow-md transition-shadow">
+          <p className="text-xs font-bold text-orange-400 uppercase tracking-wider mb-1">High Stock</p>
           <p className="text-3xl font-black text-orange-600">{stats.highAlerts}</p>
         </div>
-        <div onClick={() => setModalType('hero')} className="cursor-pointer rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-5 shadow-[0_10px_30px_rgba(15,15,16,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,15,16,0.08)]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.3em] text-[#8c6a1f]">Hero Products</p>
-          <p className="text-3xl font-black text-[#8c6a1f]">{stats.heroProducts.length}</p>
+        <div onClick={() => setModalType('hero')} className="bg-white p-5 rounded-2xl shadow-sm border border-yellow-100 cursor-pointer hover:shadow-md transition-shadow">
+          <p className="text-xs font-bold text-yellow-500 uppercase tracking-wider mb-1">Hero Products</p>
+          <p className="text-3xl font-black text-yellow-500">{stats.heroProducts.length}</p>
         </div>
-        <div onClick={() => setModalType('dead')} className="cursor-pointer rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-5 shadow-[0_10px_30px_rgba(15,15,16,0.04)] transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_30px_rgba(15,15,16,0.08)]">
-          <p className="mb-1 text-xs font-bold uppercase tracking-[0.3em] text-[#5f6670]">Dead Stock</p>
-          <p className="text-3xl font-black text-[#1b1c1f]">{stats.deadStockProducts.length}</p>
+        <div onClick={() => setModalType('dead')} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Dead Stock</p>
+          <p className="text-3xl font-black text-gray-500">{stats.deadStockProducts.length}</p>
         </div>
       </div>
 
       {/* CHARTS */}
-      <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-6 shadow-[0_10px_30px_rgba(15,15,16,0.05)]">
-          <h2 className="mb-6 text-xl font-bold uppercase tracking-[0.25em] text-[#1b1c1f]">Stock Movements (Last 7 Days)</h2>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <h2 className="text-xl font-bold text-gray-800 mb-6 uppercase tracking-tight">Stock Movements (Last 7 Days)</h2>
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.activityData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef1f4" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold', fill: '#5f6670' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold', fill: '#5f6670' }} />
-                <Tooltip cursor={{ fill: '#f7f8fa' }} />
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 'bold' }} />
+                <Tooltip cursor={{ fill: '#f9fafb' }} />
                 <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ paddingBottom: '20px' }} />
                 <Bar dataKey="inward" fill="#10B981" radius={[4, 4, 0, 0]} name="Inward" />
-                <Bar dataKey="outward" fill="#D64545" radius={[4, 4, 0, 0]} name="Outward" />
+                <Bar dataKey="outward" fill="#EF4444" radius={[4, 4, 0, 0]} name="Outward" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="flex flex-col items-center rounded-3xl border border-[#d9dde3] bg-[#ffffff] p-6 shadow-[0_10px_30px_rgba(15,15,16,0.05)]">
-          <h2 className="mb-1 self-start text-xl font-bold uppercase tracking-[0.25em] text-[#1b1c1f]">Stock Distribution</h2>
-          <p className="mb-4 self-start text-xs text-[#5f6670]">Click any slice to view products</p>
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center">
+          <h2 className="text-xl font-bold text-gray-800 mb-1 self-start uppercase tracking-tight">Stock Distribution</h2>
+          <p className="text-xs text-gray-400 self-start mb-4">Click any slice to view products</p>
           <div className="h-72 w-full cursor-pointer">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -445,22 +445,22 @@ export default function Dashboard() {
 
       {/* ── HERO PRODUCTS STRIP ─────────────────────────────────────────────── */}
       {stats.heroProducts.length > 0 && (
-        <div className="mb-8 overflow-hidden rounded-3xl border border-[#d9dde3] bg-[#ffffff] shadow-[0_10px_30px_rgba(15,15,16,0.05)]">
-          <div className="flex items-center justify-between bg-gradient-to-r from-[#0f0f10] via-[#1b1c1f] to-[#2a2d33] px-6 py-4">
+        <div className="bg-white rounded-2xl shadow-sm border border-yellow-100 mb-8 overflow-hidden">
+          <div className="px-6 py-4 bg-gradient-to-r from-yellow-400 to-orange-400 flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-black uppercase tracking-[0.25em] text-white">🏆 Hero Products</h2>
-              <p className="mt-0.5 text-xs text-[#d9dde3]">Top 10 products by total outward sales · Click any row to view ledger</p>
+              <h2 className="text-lg font-black text-white uppercase tracking-tight">🏆 Hero Products</h2>
+              <p className="text-yellow-100 text-xs mt-0.5">Top 10 products by total outward sales · Click any row to view ledger</p>
             </div>
-            <button onClick={() => setModalType('hero')} className="rounded-lg bg-white/15 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-white/25">View All</button>
+            <button onClick={() => setModalType('hero')} className="bg-white/20 hover:bg-white/30 text-white text-xs font-bold px-3 py-1.5 rounded-lg transition-colors">View All</button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[#f7f8fa]">
+              <thead className="bg-yellow-50">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">#</th>
-                  <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Product</th>
-                  <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Total Outward</th>
-                  <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Current Stock</th>
+                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">#</th>
+                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product</th>
+                  <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Total Outward</th>
+                  <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Current Stock</th>
                 </tr>
               </thead>
               <tbody>
@@ -468,16 +468,16 @@ export default function Dashboard() {
                   <tr
                     key={p.id}
                     onClick={() => openLedger(p)}
-                    className="cursor-pointer border-t border-[#e7ebef] transition-colors hover:bg-[#f7f8fa] group"
+                    className="border-t border-gray-100 hover:bg-yellow-50 cursor-pointer transition-colors group"
                   >
                     <td className="px-5 py-3">
-                      <span className={`text-sm font-black ${i === 0 ? 'text-[#8c6a1f]' : i === 1 ? 'text-[#5f6670]' : i === 2 ? 'text-[#8c949e]' : 'text-[#cfd4da]'}`}>
+                      <span className={`font-black text-sm ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-400' : 'text-gray-300'}`}>
                         {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="text-sm font-medium text-[#1b1c1f] transition-colors group-hover:text-[#0f0f10]">{p.product_name}</div>
-                      <div className="font-mono text-xs text-[#5f6670]">{p.product_id}</div>
+                      <div className="font-medium text-gray-800 text-sm group-hover:text-orange-600 transition-colors">{p.product_name}</div>
+                      <div className="font-mono text-xs text-gray-400">{p.product_id}</div>
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span className="font-black text-orange-500 tabular-nums">{p.totalOutward.toLocaleString()}</span>
@@ -498,22 +498,22 @@ export default function Dashboard() {
       )}
 
       {/* ── DEAD STOCK SECTION ──────────────────────────────────────────────── */}
-      <div className="mb-8 overflow-hidden rounded-3xl border border-[#d9dde3] bg-[#ffffff] shadow-[0_10px_30px_rgba(15,15,16,0.05)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-[#0f0f10] via-[#1b1c1f] to-[#2a2d33] px-6 py-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mb-8 overflow-hidden">
+        <div className="px-6 py-4 bg-gradient-to-r from-gray-600 to-gray-700 flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-lg font-black uppercase tracking-[0.25em] text-white">💤 Dead Stock</h2>
-            <p className="mt-0.5 text-xs text-[#d9dde3]">Products with stock but zero outward in the selected period · Click any row to view ledger</p>
+            <h2 className="text-lg font-black text-white uppercase tracking-tight">💤 Dead Stock</h2>
+            <p className="text-gray-300 text-xs mt-0.5">Products with stock but zero outward in the selected period · Click any row to view ledger</p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-[#d9dde3]">No movement in:</span>
+            <span className="text-gray-300 text-xs font-semibold">No movement in:</span>
             {[15, 30, 60, 90].map(d => (
               <button
                 key={d}
                 onClick={() => setDeadDays(d)}
-                className={`rounded-lg px-3 py-1 text-xs font-bold transition-colors ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
                   deadDays === d
-                    ? "bg-white text-[#0f0f10]"
-                    : "bg-white/15 text-white hover:bg-white/25"
+                    ? "bg-white text-gray-800"
+                    : "bg-white/20 text-white hover:bg-white/30"
                 }`}
               >
                 {d}d
@@ -523,18 +523,18 @@ export default function Dashboard() {
         </div>
 
         {stats.deadStockProducts.length === 0 ? (
-          <div className="p-10 text-center text-[#5f6670]">
-            <div className="mb-2 text-3xl">✅</div>
+          <div className="p-10 text-center text-gray-400">
+            <div className="text-3xl mb-2">✅</div>
             <p className="font-semibold">No dead stock in the last {deadDays} days!</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-[#f7f8fa]">
+              <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Product</th>
-                  <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Current Stock</th>
-                  <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Low Alert</th>
+                  <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product</th>
+                  <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Current Stock</th>
+                  <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Low Alert</th>
                 </tr>
               </thead>
               <tbody>
@@ -542,14 +542,14 @@ export default function Dashboard() {
                   <tr
                     key={p.id}
                     onClick={() => openLedger(p)}
-                    className="cursor-pointer border-t border-[#e7ebef] transition-colors hover:bg-[#f7f8fa] group"
+                    className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors group"
                   >
                     <td className="px-5 py-3">
-                      <div className="font-medium text-[#1b1c1f] transition-colors group-hover:text-[#0f0f10]">{p.product_name}</div>
-                      <div className="font-mono text-xs text-[#5f6670]">{p.product_id}</div>
+                      <div className="font-medium text-gray-800 group-hover:text-gray-600 transition-colors">{p.product_name}</div>
+                      <div className="font-mono text-xs text-gray-400">{p.product_id}</div>
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <span className="font-black text-[#1b1c1f] tabular-nums">{p.currentStock}</span>
+                      <span className="font-black text-gray-700 tabular-nums">{p.currentStock}</span>
                     </td>
                     <td className="px-5 py-3 text-right">
                       <span className="font-semibold text-orange-500 tabular-nums">{p.low_stock_alert || "—"}</span>
@@ -564,37 +564,37 @@ export default function Dashboard() {
 
       {/* ── PIE CATEGORY MODAL ──────────────────────────────────────────────── */}
       {selectedCategory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
-          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-[#d9dde3] bg-[#ffffff] shadow-2xl">
-            <div className="flex items-center justify-between px-6 py-4" style={{ background: categoryColor }}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 flex items-center justify-between" style={{ background: categoryColor }}>
               <div>
                 <h2 className="text-lg font-black text-white">{selectedCategory}</h2>
-                <p className="mt-0.5 text-xs text-white/70">{categoryProducts.length} products</p>
+                <p className="text-white/70 text-xs mt-0.5">{categoryProducts.length} products</p>
               </div>
-              <button onClick={() => setSelectedCategory(null)} className="text-3xl font-light leading-none text-white/80 hover:text-white">✕</button>
+              <button onClick={() => setSelectedCategory(null)} className="text-white/80 hover:text-white text-3xl font-light leading-none">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#f7f8fa]">
+                <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Product ID</th>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Product Name</th>
-                    <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Stock</th>
+                    <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product ID</th>
+                    <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product Name</th>
+                    <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Stock</th>
                   </tr>
                 </thead>
                 <tbody>
                   {categoryProducts.map((p, i) => (
-                    <tr key={p.id} className={`border-t border-[#e7ebef] ${i % 2 === 0 ? "bg-white" : "bg-[#f7f8fa]"}`}>
-                      <td className="px-5 py-3 font-mono text-xs text-[#5f6670]">{p.product_id}</td>
-                      <td className="px-5 py-3 font-medium text-[#1b1c1f]">{p.product_name}</td>
-                      <td className="px-5 py-3 text-right font-bold text-[#1b1c1f] tabular-nums">{p.currentStock}</td>
+                    <tr key={p.id} className={`border-t border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
+                      <td className="px-5 py-3 font-mono text-xs text-gray-500">{p.product_id}</td>
+                      <td className="px-5 py-3 font-medium text-gray-800">{p.product_name}</td>
+                      <td className="px-5 py-3 text-right font-bold text-gray-700 tabular-nums">{p.currentStock}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end border-t border-[#d9dde3] bg-[#f7f8fa] px-6 py-3">
-              <button onClick={() => setSelectedCategory(null)} className="rounded-xl bg-[#0f0f10] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1b1c1f]">Close</button>
+            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setSelectedCategory(null)} className="bg-gray-700 hover:bg-gray-800 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
@@ -602,37 +602,37 @@ export default function Dashboard() {
 
       {/* ── ALERT MODALS (low / high) ───────────────────────────────────────── */}
       {(modalType === 'low' || modalType === 'high') && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
-          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-[#d9dde3] bg-[#ffffff] shadow-2xl">
-            <div className={`flex items-center justify-between px-6 py-4 ${modalType === 'low' ? 'bg-red-600' : 'bg-orange-500'}`}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className={`px-6 py-4 flex items-center justify-between ${modalType === 'low' ? 'bg-red-600' : 'bg-orange-500'}`}>
               <div>
                 <h2 className="text-lg font-black text-white">{modalType === 'low' ? '🔴 Low Stock Alerts' : '🟠 High Stock Alerts'}</h2>
-                <p className="mt-0.5 text-xs text-white/70">
+                <p className="text-white/70 text-xs mt-0.5">
                   {modalType === 'low' ? stats.lowAlertProducts.length : stats.highAlertProducts.length} products
                 </p>
               </div>
-              <button onClick={() => setModalType(null)} className="text-3xl font-light leading-none text-white/80 hover:text-white">✕</button>
+              <button onClick={() => setModalType(null)} className="text-white/80 hover:text-white text-3xl font-light leading-none">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#f7f8fa]">
+                <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Product</th>
-                    <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Stock</th>
-                    <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Alert Level</th>
+                    <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product</th>
+                    <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Stock</th>
+                    <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">Alert Level</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(modalType === 'low' ? stats.lowAlertProducts : stats.highAlertProducts).map((p, i) => (
-                    <tr key={p.id} className={`border-t border-[#e7ebef] ${i % 2 === 0 ? "bg-white" : "bg-[#f7f8fa]"}`}>
+                    <tr key={p.id} className={`border-t border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
                       <td className="px-5 py-3">
-                        <div className="font-medium text-[#1b1c1f]">{p.product_name}</div>
-                        <div className="font-mono text-xs text-[#5f6670]">{p.product_id}</div>
+                        <div className="font-medium text-gray-800">{p.product_name}</div>
+                        <div className="font-mono text-xs text-gray-400">{p.product_id}</div>
                       </td>
                       <td className={`px-5 py-3 text-right font-bold tabular-nums ${modalType === 'low' ? 'text-red-600' : 'text-orange-600'}`}>
                         {p.currentStock}
                       </td>
-                      <td className="px-5 py-3 text-right text-[#5f6670] tabular-nums">
+                      <td className="px-5 py-3 text-right text-gray-500 tabular-nums">
                         {modalType === 'low' ? p.low_stock_alert : p.high_stock_alert}
                       </td>
                     </tr>
@@ -640,8 +640,8 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end border-t border-[#d9dde3] bg-[#f7f8fa] px-6 py-3">
-              <button onClick={() => setModalType(null)} className="rounded-xl bg-[#0f0f10] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1b1c1f]">Close</button>
+            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setModalType(null)} className="bg-gray-700 hover:bg-gray-800 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
@@ -649,23 +649,23 @@ export default function Dashboard() {
 
       {/* ── HERO / DEAD STOCK LIST MODALS ───────────────────────────────────── */}
       {(modalType === 'hero' || modalType === 'dead') && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4">
-          <div className="flex max-h-[80vh] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-[#d9dde3] bg-[#ffffff] shadow-2xl">
-            <div className={`flex items-center justify-between px-6 py-4 ${modalType === 'hero' ? 'bg-gradient-to-r from-[#0f0f10] via-[#1b1c1f] to-[#2a2d33]' : 'bg-gradient-to-r from-[#0f0f10] via-[#1b1c1f] to-[#2a2d33]'}`}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+            <div className={`px-6 py-4 flex items-center justify-between ${modalType === 'hero' ? 'bg-gradient-to-r from-yellow-400 to-orange-400' : 'bg-gradient-to-r from-gray-600 to-gray-700'}`}>
               <div>
                 <h2 className="text-lg font-black text-white">{modalType === 'hero' ? '🏆 All Hero Products' : '💤 All Dead Stock'}</h2>
-                <p className="mt-0.5 text-xs text-white/70">
+                <p className="text-white/70 text-xs mt-0.5">
                   {(modalType === 'hero' ? stats.heroProducts : stats.deadStockProducts).length} products · Click any row to view ledger
                 </p>
               </div>
-              <button onClick={() => setModalType(null)} className="text-3xl font-light leading-none text-white/80 hover:text-white">✕</button>
+              <button onClick={() => setModalType(null)} className="text-white/80 hover:text-white text-3xl font-light leading-none">✕</button>
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-[#f7f8fa]">
+                <thead className="bg-gray-50 sticky top-0">
                   <tr>
-                    <th className="px-5 py-3 text-left text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">Product</th>
-                    <th className="px-5 py-3 text-right text-xs font-bold uppercase tracking-[0.25em] text-[#5f6670]">
+                    <th className="px-5 py-3 text-left text-xs font-bold text-gray-500 uppercase">Product</th>
+                    <th className="px-5 py-3 text-right text-xs font-bold text-gray-500 uppercase">
                       {modalType === 'hero' ? 'Total Outward' : 'Current Stock'}
                     </th>
                   </tr>
@@ -675,13 +675,13 @@ export default function Dashboard() {
                     <tr
                       key={p.id}
                       onClick={() => { setModalType(null); openLedger(p); }}
-                      className={`cursor-pointer border-t border-[#e7ebef] transition-colors hover:bg-[#f7f8fa] group ${i % 2 === 0 ? "bg-white" : "bg-[#f7f8fa]"}`}
+                      className={`border-t border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors group ${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}
                     >
                       <td className="px-5 py-3">
-                        <div className="font-medium text-[#1b1c1f] transition-colors group-hover:text-[#0f0f10]">{p.product_name}</div>
-                        <div className="font-mono text-xs text-[#5f6670]">{p.product_id}</div>
+                        <div className="font-medium text-gray-800 group-hover:text-blue-600 transition-colors">{p.product_name}</div>
+                        <div className="font-mono text-xs text-gray-400">{p.product_id}</div>
                       </td>
-                      <td className="px-5 py-3 text-right font-bold tabular-nums text-[#1b1c1f]">
+                      <td className="px-5 py-3 text-right font-bold tabular-nums text-gray-700">
                         {modalType === 'hero' ? (p.totalOutward || 0).toLocaleString() : p.currentStock}
                       </td>
                     </tr>
@@ -689,8 +689,8 @@ export default function Dashboard() {
                 </tbody>
               </table>
             </div>
-            <div className="flex justify-end border-t border-[#d9dde3] bg-[#f7f8fa] px-6 py-3">
-              <button onClick={() => setModalType(null)} className="rounded-xl bg-[#0f0f10] px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#1b1c1f]">Close</button>
+            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
+              <button onClick={() => setModalType(null)} className="bg-gray-700 hover:bg-gray-800 text-white font-semibold px-5 py-2 rounded-xl text-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
@@ -698,18 +698,18 @@ export default function Dashboard() {
 
       {/* ── LEDGER MODAL ────────────────────────────────────────────────────── */}
       {ledgerProduct && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 px-4 pb-4 pt-10">
-          <div className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-[24px] border border-[#d9dde3] bg-[#ffffff] shadow-2xl">
+        <div className="fixed inset-0 bg-black/60 flex items-start justify-center z-[60] pt-10 px-4 pb-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col">
 
-            <div className="rounded-t-[24px] border-b border-[#2a2d33] bg-gradient-to-r from-[#0f0f10] via-[#1b1c1f] to-[#2a2d33] px-7 py-5 text-white">
+            <div className="px-7 py-5 border-b bg-gradient-to-r from-blue-700 to-blue-800 rounded-t-2xl text-white">
               <div className="flex items-start justify-between gap-4">
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate text-xl font-bold leading-tight">{ledgerProduct.product_name}</h2>
-                  <p className="mt-1 font-mono text-sm text-[#d9dde3]">{ledgerProduct.product_id}</p>
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-xl font-bold leading-tight truncate">{ledgerProduct.product_name}</h2>
+                  <p className="text-blue-200 font-mono text-sm mt-1">{ledgerProduct.product_id}</p>
                 </div>
                 <button
                   onClick={() => setLedgerProduct(null)}
-                  className="mt-0.5 shrink-0 text-3xl font-light leading-none text-[#d9dde3] transition-colors hover:text-white"
+                  className="text-blue-200 hover:text-white text-3xl font-light transition-colors leading-none mt-0.5 shrink-0"
                 >
                   ✕
                 </button>
@@ -717,37 +717,37 @@ export default function Dashboard() {
             </div>
 
             {/* Stock by location */}
-            <div className="border-b border-[#d9dde3] bg-[#f7f8fa] px-7 py-4">
-              <div className="flex flex-wrap items-center gap-3">
+            <div className="px-7 py-4 bg-gray-50 border-b">
+              <div className="flex flex-wrap gap-3 items-center">
                 {locations.map(loc => (
-                  <div key={loc.id} className="flex min-w-[90px] flex-col items-center rounded-2xl border border-[#d9dde3] bg-white px-5 py-3 shadow-sm">
-                    <span className="mb-1 text-xs font-semibold uppercase tracking-[0.25em] text-[#5f6670]">{loc.name}</span>
-                    <span className="text-2xl font-extrabold text-[#0f0f10] tabular-nums">{stockByLocation(ledgerProduct.id, loc.name)}</span>
+                  <div key={loc.id} className="flex flex-col items-center bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm min-w-[90px]">
+                    <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">{loc.name}</span>
+                    <span className="text-2xl font-extrabold text-blue-700 tabular-nums">{stockByLocation(ledgerProduct.id, loc.name)}</span>
                   </div>
                 ))}
-                <div className="flex min-w-[90px] flex-col items-center rounded-2xl border border-[#0f0f10] bg-[#0f0f10] px-5 py-3 shadow-sm">
-                  <span className="mb-1 text-xs font-semibold uppercase tracking-[0.25em] text-[#d9dde3]">Total</span>
+                <div className="flex flex-col items-center bg-blue-700 border border-blue-700 rounded-xl px-5 py-3 shadow-sm min-w-[90px]">
+                  <span className="text-xs text-blue-200 uppercase tracking-wide font-semibold mb-1">Total</span>
                   <span className="text-2xl font-extrabold text-white tabular-nums">{totalStockForProduct(ledgerProduct.id)}</span>
                 </div>
               </div>
             </div>
 
             {/* Transactions */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="overflow-y-auto flex-1">
               {ledgerLoading ? (
-                <div className="p-10 text-center text-base text-[#5f6670]">
-                  <div className="mb-3 text-3xl">⏳</div>
+                <div className="p-10 text-center text-gray-400 text-base">
+                  <div className="text-3xl mb-3">⏳</div>
                   Loading transactions...
                 </div>
               ) : ledger.length === 0 ? (
-                <div className="p-10 text-center text-base text-[#5f6670]">
-                  <div className="mb-3 text-3xl">📭</div>
+                <div className="p-10 text-center text-gray-400 text-base">
+                  <div className="text-3xl mb-3">📭</div>
                   No transactions yet for this product.
                 </div>
               ) : (
                 <table className="w-full text-sm">
-                  <thead className="sticky top-0 border-b border-[#d9dde3] bg-[#f7f8fa] shadow-sm">
-                    <tr className="text-left text-xs uppercase tracking-[0.25em] text-[#5f6670]">
+                  <thead className="bg-gray-50 sticky top-0 border-b shadow-sm">
+                    <tr className="text-left text-gray-500 text-xs uppercase tracking-wide">
                       <th className="px-5 py-3 font-semibold">Date / Time</th>
                       <th className="px-4 py-3 font-semibold">Type</th>
                       <th className="px-4 py-3 font-semibold">Location</th>
@@ -759,8 +759,8 @@ export default function Dashboard() {
                   </thead>
                   <tbody>
                     {ledger.map((t, i) => (
-                      <tr key={t.id} className={`border-b border-[#e7ebef] transition-colors hover:bg-[#f7f8fa] ${i % 2 === 0 ? "bg-white" : "bg-[#f7f8fa]/60"}`}>
-                        <td className="px-5 py-3 font-mono text-sm whitespace-nowrap text-[#1b1c1f]">
+                      <tr key={t.id} className={`border-b hover:bg-blue-50/40 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
+                        <td className="px-5 py-3 text-gray-600 text-sm font-mono whitespace-nowrap">
                           {new Date(t.created_at).toLocaleString("en-IN", {
                             timeZone: "Asia/Kolkata",
                             day: "2-digit", month: "short", year: "numeric",
@@ -768,17 +768,17 @@ export default function Dashboard() {
                           })}
                         </td>
                         <td className="px-4 py-3">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${t.transaction_type === "inward" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${t.transaction_type === "inward" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
                             {t.transaction_type === "inward" ? "▲ IN" : "▼ OUT"}
                           </span>
                         </td>
-                        <td className="px-4 py-3 font-medium text-[#1b1c1f]">{t.location_name}</td>
-                        <td className={`px-4 py-3 text-right text-base font-bold tabular-nums ${t.transaction_type === "inward" ? "text-green-700" : "text-red-600"}`}>
+                        <td className="px-4 py-3 text-gray-700 font-medium">{t.location_name}</td>
+                        <td className={`px-4 py-3 text-right font-bold text-base tabular-nums ${t.transaction_type === "inward" ? "text-green-700" : "text-red-600"}`}>
                           {t.transaction_type === "inward" ? "+" : "-"}{t.quantity}
                         </td>
-                        <td className="px-4 py-3 text-right text-base font-extrabold tabular-nums text-[#1b1c1f]">{t.balance}</td>
-                        <td className="px-4 py-3 text-sm text-[#1b1c1f]">{t.party || "—"}</td>
-                        <td className="px-4 py-3 text-xs text-[#5f6670]">{t.created_by_email || "—"}</td>
+                        <td className="px-4 py-3 text-right font-extrabold text-base tabular-nums text-gray-800">{t.balance}</td>
+                        <td className="px-4 py-3 text-gray-600 text-sm">{t.party || "—"}</td>
+                        <td className="px-4 py-3 text-gray-400 text-xs">{t.created_by_email || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -786,11 +786,11 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="flex items-center justify-between rounded-b-[24px] border-t border-[#d9dde3] bg-[#f7f8fa] px-7 py-4">
-              <span className="text-sm text-[#5f6670]">{ledger.length} transaction{ledger.length !== 1 ? "s" : ""} recorded</span>
+            <div className="px-7 py-4 border-t bg-gray-50 rounded-b-2xl flex items-center justify-between">
+              <span className="text-sm text-gray-400">{ledger.length} transaction{ledger.length !== 1 ? "s" : ""} recorded</span>
               <button
                 onClick={() => setLedgerProduct(null)}
-                className="rounded-xl bg-[#0f0f10] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#1b1c1f]"
+                className="bg-gray-700 hover:bg-gray-800 text-white font-semibold px-6 py-2.5 rounded-xl transition-colors text-sm"
               >
                 Close
               </button>

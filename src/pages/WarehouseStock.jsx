@@ -202,10 +202,14 @@ export default function WarehouseStock() {
     }
 
     // Step 4: fetch those products
-    const { data: prod } = await supabase
+    const { data: prod, error: prodError } = await supabase
       .from("products")
       .select("*")
       .in("id", productIds);
+
+    if (prodError) {
+      console.error("WarehouseStock.jsx - load products error:", prodError);
+    }
 
     setProducts(prod || []);
   }
@@ -223,7 +227,10 @@ export default function WarehouseStock() {
         unit: newItem.unit || "Pcs",
         low_stock_alert: Number(newItem.low_stock_alert || 0),
       }]).select("*").single();
-      if (error) throw error;
+      if (error) {
+        console.error("WarehouseStock.jsx - add product error:", error);
+        throw error;
+      }
 
       if (newItem.openingQty && Number(newItem.openingQty) > 0) {
         const { data: { user } } = await supabase.auth.getUser();

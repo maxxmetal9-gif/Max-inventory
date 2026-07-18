@@ -249,12 +249,18 @@ export default function OfficeStock() {
 
     const officeProductIds = [...new Set(officeTxns.map(t => t.product_id))];
 
-    const { data: officeProducts } = officeProductIds.length > 0
+    const { data: officeProducts, error: officeProductsError } = officeProductIds.length > 0
       ? await supabase.from("products").select("*").in("id", officeProductIds).order("product_name")
       : { data: [] };
+    if (officeProductsError) {
+      console.error("OfficeStock.jsx - load office products error:", officeProductsError);
+    }
     setProducts(officeProducts || []);
 
-    const { data: full } = await supabase.from("products").select("id, product_id, product_name").order("product_name");
+    const { data: full, error: fullProductsError } = await supabase.from("products").select("id, product_id, product_name").order("product_name");
+    if (fullProductsError) {
+      console.error("OfficeStock.jsx - load full products error:", fullProductsError);
+    }
     setAllProducts(full || []);
   }
 
@@ -272,7 +278,10 @@ export default function OfficeStock() {
         low_stock_alert: Number(newItem.low_stock_alert || 0),
         high_stock_alert: Number(newItem.high_stock_alert || 0),
       }]).select("*").single();
-      if (error) throw error;
+      if (error) {
+        console.error("OfficeStock.jsx - add product error:", error);
+        throw error;
+      }
       const { data: { user } } = await supabase.auth.getUser();
       const { error: txErr } = await supabase.from("transactions").insert([{
         product_id: inserted.id,
@@ -376,12 +385,20 @@ export default function OfficeStock() {
     for (const row of bulkRows) {
       try {
         let productDbId = null;
-        const { data: existing } = await supabase.from("products").select("id").eq("product_id", row.product_id).maybeSingle();
+        const { data: existing, error: existingError } = await supabase.from("products").select("id").eq("product_id", row.product_id).maybeSingle();
+        if (existingError) {
+          console.error("OfficeStock.jsx - check existing product error:", existingError);
+          throw existingError;
+        }
         if (existing) {
-          await supabase.from("products").update({
+          const { error: updateError } = await supabase.from("products").update({
             product_name: row.name.trim(), unit: row.unit || "Pcs",
             low_stock_alert: row.low_stock_alert || 0, high_stock_alert: row.high_stock_alert || 0,
           }).eq("id", existing.id);
+          if (updateError) {
+            console.error("OfficeStock.jsx - update product error:", updateError);
+            throw updateError;
+          }
           productDbId = existing.id; updated++;
         } else {
           const { data: inserted, error: insErr } = await supabase.from("products").insert([{

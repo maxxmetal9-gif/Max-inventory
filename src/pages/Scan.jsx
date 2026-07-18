@@ -40,6 +40,9 @@ export default function Scan() {
         .eq("product_id", decodedId)
         .single();
 
+      if (error) {
+        console.error("Scan.jsx - products lookup error:", error);
+      }
       if (error || !data) throw new Error("Not found");
       setProduct(data);
     } catch (err) {
