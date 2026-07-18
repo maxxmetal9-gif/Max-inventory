@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useCallback } from "react";
-import { supabase } from "../supabaseClient";
+import { supabase } from "../supabase";
 import * as XLSX from "xlsx";
 
 /* ─────────────────────────────────────────

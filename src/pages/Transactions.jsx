@@ -458,7 +458,7 @@ export default function Transactions() {
       const ws = XLSX.utils.json_to_sheet(exportData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Transactions");
-      XLSX.writeFile(wb, "Nivee_Metal_Transactions.xlsx");
+      XLSX.writeFile(wb, "Maxx_Metals_Transactions.xlsx");
     } catch (err) {
       alert("Export failed.");
     }
@@ -477,7 +477,7 @@ export default function Transactions() {
 
       doc.setFontSize(13);
       doc.setTextColor(10, 42, 94);
-      doc.text("Transactions Report \u2014 Nivee Metals", 14, 13);
+      doc.text("Transactions Report \u2014 Maxx Metals", 14, 13);
       doc.setFontSize(8);
       doc.setTextColor(120, 120, 120);
       doc.text("Generated: " + new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), 14, 19);
@@ -525,7 +525,7 @@ export default function Transactions() {
         margin: { top: 23, left: 14, right: 14 }
       });
 
-      doc.save("Nivee_Metal_Transactions.pdf");
+      doc.save("Maxx_Metals_Transactions.pdf");
     } catch (err) {
       console.error("PDF export error:", err);
       alert("PDF export failed: " + err.message);

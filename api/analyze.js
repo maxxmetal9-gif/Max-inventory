@@ -26,7 +26,7 @@ export default async function handler(req, res) {
 
     // 2. Build the Advanced Reporting Prompt
     const systemPrompt = `
-      You are the Nivee Metal Products AI Inventory Manager.
+      You are the Maxx Metals AI Inventory Manager.
       
       DATABASE CONTEXT:
       - Products: ${JSON.stringify(products)}

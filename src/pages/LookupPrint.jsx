@@ -156,7 +156,7 @@ export default function LookupPrint() {
 
           {/* PRINT HEADER */}
           <div className="print-only mb-4 border-b pb-3">
-            <h1 className="text-2xl font-bold">Nivee Metals — Stock Report</h1>
+            <h1 className="text-2xl font-bold">Maxx Metals — Stock Report</h1>
             <p className="text-gray-500 text-sm">Printed: {new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })}</p>
           </div>
 
