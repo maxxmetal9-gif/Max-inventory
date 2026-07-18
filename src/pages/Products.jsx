@@ -154,7 +154,7 @@ export default function Products() {
     while (true) {
       const { data, error } = await supabase
         .from("transactions")
-        .select("productid, locationid, transactiontype, quantity")
+        .select("productid:product_id, locationid:location_id, transactiontype:transaction_type, quantity")
         .range(from, from + pageSize - 1);
 
       if (error || !data || data.length === 0) break;
@@ -199,9 +199,9 @@ export default function Products() {
     const data = await fetchAllRows(
       supabase
         .from("transactions")
-        .select("*")
-        .eq("productid", product.id)
-        .order("createdat", { ascending: true })
+        .select("*, transactiontype:transaction_type, createdat:created_at")
+        .eq("product_id", product.id)
+        .order("created_at", { ascending: true })
     );
 
     let balance = 0;
@@ -301,9 +301,9 @@ export default function Products() {
     for (const loc of locs) {
       const { error } = await supabase.from("transactions").insert([
         {
-          productid: stockModal.product.id,
-          locationid: loc.id,
-          transactiontype: "inward",
+          product_id: stockModal.product.id,
+          location_id: loc.id,
+          transaction_type: "inward",
           quantity: qty,
           notes: stockForm.notes || null,
           party: stockForm.party || null,
@@ -469,7 +469,7 @@ export default function Products() {
     const rowsWithStock = bulkRows.filter((r) => r._stock !== null && r._stock > 0);
 
     if (rowsWithStock.length > 0) {
-      const { data: freshProducts, error: freshProductsError } = await supabase.from("products").select("id, productname");
+      const { data: freshProducts, error: freshProductsError } = await supabase.from("products").select("id, productname:product_name");
       if (freshProductsError) {
         console.error("Products.jsx - bulk refresh products error:", freshProductsError);
         setBulkSaving(false);
@@ -497,9 +497,9 @@ export default function Products() {
         if (!locId) continue;
 
         txns.push({
-          productid: productUUID,
-          locationid: locId,
-          transactiontype: "inward",
+          product_id: productUUID,
+          location_id: locId,
+          transaction_type: "inward",
           quantity: row._stock,
           notes: "Bulk upload opening stock",
         });

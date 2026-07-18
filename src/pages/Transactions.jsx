@@ -315,8 +315,8 @@ export default function Transactions() {
   const fetchTypeCounts = useCallback(async () => {
     const [total, inward, outward] = await Promise.all([
       supabase.from('transactions').select('id', { count: 'exact', head: true }),
-      supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('transactiontype', 'inward'),
-      supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('transactiontype', 'outward'),
+      supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('transaction_type', 'inward'),
+      supabase.from('transactions').select('id', { count: 'exact', head: true }).eq('transaction_type', 'outward'),
     ]);
     setAllTypeCounts({ all: total.count || 0, inward: inward.count || 0, outward: outward.count || 0 });
   }, []);
@@ -328,14 +328,14 @@ export default function Transactions() {
       const to = from + PAGESIZE - 1;
       const searchTerm = search.trim();
       const joinType = searchTerm ? 'products!inner(id, productname:product_name, productid:product_id)' : 'products(id, productname:product_name, productid:product_id)';
-      let query = supabase.from('transactions').select(`id, productid, locationid, transactiontype, quantity, party, notes, createdat, createdbyemail, ${joinType}`, { count: 'exact' }).order('createdat', { ascending: false }).range(from, to);
+      let query = supabase.from('transactions').select(`id, productid:product_id, locationid:location_id, transactiontype:transaction_type, quantity, party, notes, createdat:created_at, createdbyemail:created_by_email, ${joinType}`, { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
 
-      if (filterType !== 'all') query = query.eq('transactiontype', filterType);
-      if (filterLocation !== 'all') query = query.eq('locationid', filterLocation);
+      if (filterType !== 'all') query = query.eq('transaction_type', filterType);
+      if (filterLocation !== 'all') query = query.eq('location_id', filterLocation);
       const utcFrom = localDateToUTCRange(filterDateFrom, false);
       const utcTo = localDateToUTCRange(filterDateTo, true);
-      if (utcFrom) query = query.gte('createdat', utcFrom);
-      if (utcTo) query = query.lte('createdat', utcTo);
+      if (utcFrom) query = query.gte('created_at', utcFrom);
+      if (utcTo) query = query.lte('created_at', utcTo);
       if (searchTerm) query = query.or(`party.ilike.%${searchTerm}%,notes.ilike.%${searchTerm}%,products.product_name.ilike.%${searchTerm}%,products.product_id.ilike.%${searchTerm}%`);
 
       const { data, count, error } = await query;
@@ -383,16 +383,18 @@ export default function Transactions() {
       setSaving(true);
       const { data: userData } = await supabase.auth.getUser();
       const payload = {
-        productid: form.productid,
-        locationid: form.locationid,
-        transactiontype: form.transactiontype,
+        product_id: form.productid,
+        location_id: form.locationid,
+        transaction_type: form.transactiontype,
         quantity: Number(form.quantity),
         party: form.party || null,
         notes: form.notes || null,
-        createdbyemail: userData?.user?.email || 'Unknown',
+        created_by_email: userData?.user?.email || 'Unknown',
       };
-      if (editingId) await supabase.from('transactions').update(payload).eq('id', editingId);
-      else await supabase.from('transactions').insert(payload);
+      const { error } = editingId
+        ? await supabase.from('transactions').update(payload).eq('id', editingId)
+        : await supabase.from('transactions').insert(payload);
+      if (error) throw error;
       setForm({ productid: '', locationid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
       setEditingId(null);
       setShowForm(false);
@@ -400,7 +402,7 @@ export default function Transactions() {
       await fetchTypeCounts();
       await fetchTransactions();
     } catch (err) {
-      alert('Failed to save transaction.');
+      alert(`Failed to save transaction: ${err.message || err}`);
     } finally {
       setSaving(false);
     }
@@ -428,7 +430,7 @@ export default function Transactions() {
 
   const exportToExcel = async () => {
     try {
-      const { data: allTrans } = await supabase.from('transactions').select('createdat, productid, transactiontype, quantity, locationid, party, notes, createdbyemail, products(id, productname:product_name, productid:product_id)').order('createdat', { ascending: false });
+      const { data: allTrans } = await supabase.from('transactions').select('createdat:created_at, productid:product_id, transactiontype:transaction_type, quantity, locationid:location_id, party, notes, createdbyemail:created_by_email, products(id, productname:product_name, productid:product_id)').order('created_at', { ascending: false });
       const exportData = (allTrans || []).map((t) => ({
         'Date IST': formatIST(t.createdat),
         Product: getProductName(t),
@@ -450,7 +452,7 @@ export default function Transactions() {
 
   const exportToPDF = async () => {
     try {
-      const { data: allTrans, error } = await supabase.from('transactions').select('createdat, productid, transactiontype, quantity, locationid, party, notes, createdbyemail, products(id, productname:product_name, productid:product_id)').order('createdat', { ascending: false });
+      const { data: allTrans, error } = await supabase.from('transactions').select('createdat:created_at, productid:product_id, transactiontype:transaction_type, quantity, locationid:location_id, party, notes, createdbyemail:created_by_email, products(id, productname:product_name, productid:product_id)').order('created_at', { ascending: false });
       if (error) throw error;
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const pageW = doc.internal.pageSize.getWidth();
@@ -699,3 +701,4 @@ export default function Transactions() {
     </div>
   );
 }
+
