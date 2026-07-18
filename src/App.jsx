@@ -9,41 +9,23 @@ import Scan from "./pages/Scan.jsx";
 import QRPrint from "./pages/QRPrint.jsx";
 import Login from "./pages/Login.jsx";
 import UpdatePassword from "./pages/UpdatePassword.jsx";
-import WarehouseStock from "./pages/WarehouseStock.jsx";
-import OfficeStock from "./pages/OfficeStock.jsx";
 import LookupPrint from "./pages/LookupPrint.jsx";
 
-// Emails that only get warehouse-level access (no Office Stock, Products management, etc.)
-const WAREHOUSE_ONLY_EMAILS = [
-  "pursingh@nivee.com",         // primary
-  "pursingh@niveemetals.com",   // alternate — add whichever he uses
-];
-
 const ALL_NAV_ITEMS = [
-  { to: "/",           label: "Dashboard",    icon: "📊", warehouseAllowed: true  },
-  { to: "/products",   label: "Products",     icon: "📦", warehouseAllowed: false },
-  { to: "/transactions",label: "Transactions", icon: "🔄", warehouseAllowed: true  },
-  { to: "/warehouse",  label: "Warehouse",    icon: "🏭", warehouseAllowed: true  },
-  { to: "/office",     label: "Office Stock", icon: "🏢", warehouseAllowed: false },
-  { to: "/lookup",     label: "Lookup & Print",icon: "🔍", warehouseAllowed: true  },
+  { to: "/", label: "Dashboard", icon: "📊" },
+  { to: "/products", label: "Products", icon: "📦" },
+  { to: "/transactions", label: "Transactions", icon: "🔄" },
+  { to: "/lookup", label: "Lookup & Print", icon: "🔍" },
 ];
-
-function isWarehouseOnly(email) {
-  if (!email) return false;
-  return WAREHOUSE_ONLY_EMAILS.map(e => e.toLowerCase()).includes(email.toLowerCase());
-}
 
 function NavBar({ session, onSignOut }) {
   const location = useLocation();
   if (!session || window.location.href.includes("update-password")) return null;
 
-  const restricted = isWarehouseOnly(session.user.email);
-  const navItems = ALL_NAV_ITEMS.filter(item => !restricted || item.warehouseAllowed);
-
   return (
     <nav className="bg-gray-900 text-white px-4 py-3 flex justify-between items-center no-print sticky top-0 z-40 shadow-lg">
       <div className="flex gap-1 overflow-x-auto scrollbar-hide">
-        {navItems.map(({ to, label, icon }) => {
+        {ALL_NAV_ITEMS.map(({ to, label, icon }) => {
           const active = location.pathname === to;
           return (
             <Link
@@ -74,14 +56,6 @@ function NavBar({ session, onSignOut }) {
   );
 }
 
-// Guard: redirect warehouse-only users away from restricted routes
-function RouteGuard({ session, children, restricted }) {
-  if (restricted && isWarehouseOnly(session?.user?.email)) {
-    return <Navigate to="/warehouse" replace />;
-  }
-  return children;
-}
-
 function AppContent({ session, onSignOut }) {
   return (
     <>
@@ -92,20 +66,10 @@ function AppContent({ session, onSignOut }) {
         {session ? (
           <>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/products" element={
-              <RouteGuard session={session} restricted>
-                <Products />
-              </RouteGuard>
-            } />
+            <Route path="/products" element={<Products />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/scan" element={<Scan />} />
             <Route path="/qr-print" element={<QRPrint />} />
-            <Route path="/warehouse" element={<WarehouseStock />} />
-            <Route path="/office" element={
-              <RouteGuard session={session} restricted>
-                <OfficeStock />
-              </RouteGuard>
-            } />
             <Route path="/lookup" element={<LookupPrint />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>

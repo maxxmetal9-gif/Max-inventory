@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../supabase";
+import { OFFICE_LOCATION_ID } from "../constants";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
   BarChart, Bar, XAxis, YAxis, CartesianGrid
@@ -36,8 +37,6 @@ export default function Dashboard() {
   const [ledgerProduct, setLedgerProduct] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [ledgerLoading, setLedgerLoading] = useState(false);
-  const [locations, setLocations] = useState([]);
-  const [stockSummary, setStockSummary] = useState({});
 
   const COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#EC4899", "#F97316", "#8B5CF6"];
   const CATEGORY_COLORS = {
@@ -51,8 +50,6 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
-    loadLocations();
-    loadStockSummary();
   }, []);
   useEffect(() => { fetchDashboardData(); }, [deadDays]);
 
@@ -64,28 +61,6 @@ export default function Dashboard() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [deadDays]);
 
-  const loadLocations = async () => {
-    const { data } = await supabase.from("locations").select("*");
-    setLocations(data || []);
-  };
-
-  const loadStockSummary = async () => {
-    const { data } = await supabase.from("stock_summary").select("*");
-    const summary = {};
-    (data || []).forEach(row => {
-      if (!summary[row.product_id]) summary[row.product_id] = {};
-      const qty = row.current_stock ?? row.total_stock ?? 0;
-      summary[row.product_id][row.location_name] = qty;
-    });
-    setStockSummary(summary);
-  };
-
-  const stockByLocation = (productId, locationName) =>
-    stockSummary[productId]?.[locationName] ?? 0;
-
-  const totalStockForProduct = (productId) =>
-    Object.values(stockSummary[productId] || {}).reduce((s, v) => s + v, 0);
-
   // ── Open ledger modal ────────────────────────────────────────────────────────
   const openLedger = async (product) => {
     setLedgerProduct(product);
@@ -94,19 +69,19 @@ export default function Dashboard() {
     try {
       const { data: productTrans, error } = await supabase
         .from("transactions")
-        .select("id, quantity, party, notes, createdbyemail, transaction_type:transactiontype, created_at:createdat, locations(name)")
-        .eq("productid", product.id)
-        .order("createdat", { ascending: true });
+        .select("id, quantity, party, notes, created_by_email, transaction_type, created_at")
+        .eq("product_id", product.id)
+        .eq("location_id", OFFICE_LOCATION_ID)
+        .order("created_at", { ascending: true });
       if (error) throw error;
 
       let balance = 0;
-      const calculated = (productTrans || []).map(t => {
-        if (t.transaction_type === "inward") balance += Number(t.quantity);
-        else balance -= Number(t.quantity);
-        return { ...t, location_name: t.locations?.name || "", balance };
+      const calculated = (productTrans || []).map((t) => {
+        if (t.transaction_type === "inward") balance += Number(t.quantity || 0);
+        else if (t.transaction_type === "outward") balance -= Number(t.quantity || 0);
+        return { ...t, location_name: "Office", balance };
       });
       setLedger(calculated);
-      await loadStockSummary();
     } catch (err) {
       console.error("Failed to load ledger:", err.message);
     } finally {
@@ -119,64 +94,44 @@ export default function Dashboard() {
       const { data: productsData, error: productsError } = await supabase
         .from("products")
         .select("id, product_id, product_name, low_stock_alert, high_stock_alert");
-      if (productsError) {
-        console.error("Dashboard.jsx - products query error:", productsError);
-      }
+      if (productsError) throw productsError;
 
-      const { data: recentTrans } = await supabase
+      const { data: allTransactionsData, error: transactionsError } = await supabase
         .from("transactions")
-        .select("*, products(product_name, product_id), locations(name)")
-        .order("createdat", { ascending: false })
+        .select("product_id, transaction_type, quantity, created_at")
+        .eq("location_id", OFFICE_LOCATION_ID);
+      if (transactionsError) throw transactionsError;
+
+      const { data: recentTransactionsData, error: recentTransactionsError } = await supabase
+        .from("transactions")
+        .select("id, product_id, transaction_type, quantity, created_at, party, notes, created_by_email, products(product_name, product_id)")
+        .eq("location_id", OFFICE_LOCATION_ID)
+        .order("created_at", { ascending: false })
         .limit(5);
+      if (recentTransactionsError) throw recentTransactionsError;
 
-      const { data: stockSummaryData } = await supabase
-        .from("stock_summary")
-        .select("*");
-
-      // ── Hero products: top 10 by total outward quantity (all time) ──────────
-      const { data: outwardData } = await supabase
-        .from("transactions")
-        .select("product_id:productid, quantity")
-        .eq("transactiontype", "outward");
-
-      const outwardMap = {};
-      (outwardData || []).forEach(t => {
-        outwardMap[t.product_id] = (outwardMap[t.product_id] || 0) + Number(t.quantity);
-      });
-
-      // ── Dead stock: products with NO outward in last `deadDays` days ────────
-      const deadCutoff = new Date();
-      deadCutoff.setUTCDate(deadCutoff.getUTCDate() - deadDays);
-      deadCutoff.setUTCHours(0, 0, 0, 0);
-
-      const { data: recentOutward } = await supabase
-        .from("transactions")
-        .select("product_id:productid")
-        .eq("transactiontype", "outward")
-        .gte("createdat", deadCutoff.toISOString());
-
-      const activeProductIds = new Set((recentOutward || []).map(t => t.product_id));
-
-      // stockMap: { uuid → total stock }
       const stockMap = {};
-      (stockSummaryData || []).forEach(row => {
-        const qty = row.current_stock ?? row.total_stock ?? 0;
-        stockMap[row.product_id] = (stockMap[row.product_id] || 0) + qty;
-      });
-
-      // Ensure ALL products appear even if they have zero transactions
-      (productsData || []).forEach(p => {
-        if (!(p.id in stockMap)) stockMap[p.id] = 0;
+      (productsData || []).forEach((p) => { stockMap[p.id] = 0; });
+      (allTransactionsData || []).forEach((t) => {
+        if (!t.product_id) return;
+        if (!stockMap[t.product_id]) stockMap[t.product_id] = 0;
+        const qty = Number(t.quantity) || 0;
+        if (t.transaction_type === "inward") stockMap[t.product_id] += qty;
+        else if (t.transaction_type === "outward") stockMap[t.product_id] -= qty;
       });
 
       const productInfo = {};
-      (productsData || []).forEach(p => {
+      (productsData || []).forEach((p) => {
         productInfo[p.id] = { product_id: p.product_id, product_name: p.product_name };
       });
 
-      // Category totals for pie
       let totalStock = 0;
-      let polish = 0, seamless = 0, nb = 0, sheets = 0, nonPolish = 0, other = 0;
+      let polish = 0;
+      let seamless = 0;
+      let nb = 0;
+      let sheets = 0;
+      let nonPolish = 0;
+      let other = 0;
       const categoryProductsMap = {};
 
       Object.entries(stockMap).forEach(([uuid, stock]) => {
@@ -185,23 +140,35 @@ export default function Dashboard() {
         const pId = (info.product_id || "").toUpperCase();
         const pName = (info.product_name || "").toUpperCase();
         let cat;
-        if (pId.startsWith("NM-PP")) { polish += stock; cat = "Polish Pipe"; }
-        else if (pId.startsWith("NM-NBSMLS")) { seamless += stock; cat = "Seamless Pipe"; }
-        else if (pId.startsWith("NM-NB")) { nb += stock; cat = "NB Pipe"; }
-        else if (pId.startsWith("NM-SH") || pId.startsWith("NM-SNO") || pId.includes("SHEET") || pName.includes("SHEET")) { sheets += stock; cat = "Sheets"; }
-        else if (pId.startsWith("NM-NMPR") || pId.startsWith("NM-NPS") || pId.startsWith("NM-NPR")) { nonPolish += stock; cat = "Non-Polish Pipe"; }
-        else { other += stock; cat = "Others"; }
+        if (pId.startsWith("NM-PP")) {
+          polish += stock;
+          cat = "Polish Pipe";
+        } else if (pId.startsWith("NM-NBSMLS")) {
+          seamless += stock;
+          cat = "Seamless Pipe";
+        } else if (pId.startsWith("NM-NB")) {
+          nb += stock;
+          cat = "NB Pipe";
+        } else if (pId.startsWith("NM-SH") || pId.startsWith("NM-SNO") || pId.includes("SHEET") || pName.includes("SHEET")) {
+          sheets += stock;
+          cat = "Sheets";
+        } else if (pId.startsWith("NM-NMPR") || pId.startsWith("NM-NPS") || pId.startsWith("NM-NPR")) {
+          nonPolish += stock;
+          cat = "Non-Polish Pipe";
+        } else {
+          other += stock;
+          cat = "Others";
+        }
         if (!categoryProductsMap[cat]) categoryProductsMap[cat] = [];
         categoryProductsMap[cat].push({ id: uuid, product_id: info.product_id || "", product_name: info.product_name || "", currentStock: stock });
       });
 
-      Object.keys(categoryProductsMap).forEach(cat => {
+      Object.keys(categoryProductsMap).forEach((cat) => {
         categoryProductsMap[cat].sort((a, b) => a.product_id.localeCompare(b.product_id));
       });
 
-      // Last 7 days activity
       const last7Days = [];
-      for (let i = 6; i >= 0; i--) {
+      for (let i = 6; i >= 0; i -= 1) {
         const d = new Date();
         d.setDate(d.getDate() - i);
         last7Days.push(d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" }));
@@ -209,47 +176,58 @@ export default function Dashboard() {
       const cutoffUTC = new Date();
       cutoffUTC.setUTCDate(cutoffUTC.getUTCDate() - 6);
       cutoffUTC.setUTCHours(0, 0, 0, 0);
-      const { data: recentActivity } = await supabase
-        .from("transactions")
-        .select("transaction_type:transactiontype, quantity, created_at:createdat")
-        .gte("createdat", cutoffUTC.toISOString())
-        .order("createdat", { ascending: true });
+      const recentActivity = (allTransactionsData || []).filter((t) => t.created_at && new Date(t.created_at) >= cutoffUTC);
 
       const dailyMap = {};
-      last7Days.forEach(label => { dailyMap[label] = { name: label, inward: 0, outward: 0 }; });
-      (recentActivity || []).forEach(t => {
-        if (!t.created_at) return;
+      last7Days.forEach((label) => { dailyMap[label] = { name: label, inward: 0, outward: 0 }; });
+      recentActivity.forEach((t) => {
         const label = new Date(t.created_at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
         if (dailyMap[label]) {
-          if (t.transaction_type === "inward") dailyMap[label].inward += Number(t.quantity);
-          else dailyMap[label].outward += Number(t.quantity);
+          if (t.transaction_type === "inward") dailyMap[label].inward += Number(t.quantity || 0);
+          else if (t.transaction_type === "outward") dailyMap[label].outward += Number(t.quantity || 0);
         }
       });
-      const activityData = last7Days.map(label => dailyMap[label]);
+      const activityData = last7Days.map((label) => dailyMap[label]);
 
-      // Low / High alerts
-      const lowList = [], highList = [];
-      (productsData || []).forEach(p => {
+      const lowList = [];
+      const highList = [];
+      (productsData || []).forEach((p) => {
         const currentStock = stockMap[p.id] || 0;
         if (p.low_stock_alert > 0 && currentStock <= p.low_stock_alert) lowList.push({ ...p, currentStock });
         if (p.high_stock_alert > 0 && currentStock >= p.high_stock_alert) highList.push({ ...p, currentStock });
       });
 
-      // Hero products: top 10 by outward quantity, must have stock > 0
+      const outwardMap = {};
+      (allTransactionsData || []).forEach((t) => {
+        if (t.transaction_type === "outward" && t.product_id) {
+          outwardMap[t.product_id] = (outwardMap[t.product_id] || 0) + Number(t.quantity || 0);
+        }
+      });
+
+      const deadCutoff = new Date();
+      deadCutoff.setUTCDate(deadCutoff.getUTCDate() - deadDays);
+      deadCutoff.setUTCHours(0, 0, 0, 0);
+      const { data: recentOutwardData } = await supabase
+        .from("transactions")
+        .select("product_id")
+        .eq("location_id", OFFICE_LOCATION_ID)
+        .eq("transaction_type", "outward")
+        .gte("created_at", deadCutoff.toISOString());
+      const activeProductIds = new Set((recentOutwardData || []).map((t) => t.product_id));
+
       const heroProducts = (productsData || [])
-        .map(p => ({
+        .map((p) => ({
           ...p,
           totalOutward: outwardMap[p.id] || 0,
-          currentStock: stockMap[p.id] || 0
+          currentStock: stockMap[p.id] || 0,
         }))
-        .filter(p => p.totalOutward > 0)
+        .filter((p) => p.totalOutward > 0)
         .sort((a, b) => b.totalOutward - a.totalOutward)
         .slice(0, 10);
 
-      // Dead stock: has current stock > 0, but no outward in last N days
       const deadStockProducts = (productsData || [])
-        .map(p => ({ ...p, currentStock: stockMap[p.id] || 0 }))
-        .filter(p => p.currentStock > 0 && !activeProductIds.has(p.id))
+        .map((p) => ({ ...p, currentStock: stockMap[p.id] || 0 }))
+        .filter((p) => p.currentStock > 0 && !activeProductIds.has(p.id))
         .sort((a, b) => b.currentStock - a.currentStock);
 
       setStats({
@@ -257,21 +235,21 @@ export default function Dashboard() {
         totalStock,
         lowAlerts: lowList.length,
         highAlerts: highList.length,
-        recentTransactions: recentTrans || [],
+        recentTransactions: recentTransactionsData || [],
         activityData,
         categoryProductsMap,
         pieData: [
-          { name: "Seamless Pipe",   value: Math.max(0, seamless) },
-          { name: "Polish Pipe",     value: Math.max(0, polish) },
-          { name: "NB Pipe",         value: Math.max(0, nb) },
-          { name: "Sheets",          value: Math.max(0, sheets) },
+          { name: "Seamless Pipe", value: Math.max(0, seamless) },
+          { name: "Polish Pipe", value: Math.max(0, polish) },
+          { name: "NB Pipe", value: Math.max(0, nb) },
+          { name: "Sheets", value: Math.max(0, sheets) },
           { name: "Non-Polish Pipe", value: Math.max(0, nonPolish) },
-          { name: "Others",          value: Math.max(0, other) }
-        ].filter(item => item.value > 0),
+          { name: "Others", value: Math.max(0, other) },
+        ].filter((item) => item.value > 0),
         lowAlertProducts: lowList,
         highAlertProducts: highList,
         heroProducts,
-        deadStockProducts
+        deadStockProducts,
       });
     } catch (err) {
       console.error("Dashboard error:", err.message);
@@ -336,7 +314,7 @@ export default function Dashboard() {
     <div className="p-6 md:p-8">
       {/* HEADER */}
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Warehouse Intelligence</h1>
+        <h1 className="text-3xl font-bold text-gray-800 tracking-tight">Inventory Intelligence</h1>
       </div>
 
       {/* AI Assistant */}
@@ -716,18 +694,12 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Stock by location */}
+            {/* Stock summary */}
             <div className="px-7 py-4 bg-gray-50 border-b">
               <div className="flex flex-wrap gap-3 items-center">
-                {locations.map(loc => (
-                  <div key={loc.id} className="flex flex-col items-center bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm min-w-[90px]">
-                    <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">{loc.name}</span>
-                    <span className="text-2xl font-extrabold text-blue-700 tabular-nums">{stockByLocation(ledgerProduct.id, loc.name)}</span>
-                  </div>
-                ))}
-                <div className="flex flex-col items-center bg-blue-700 border border-blue-700 rounded-xl px-5 py-3 shadow-sm min-w-[90px]">
-                  <span className="text-xs text-blue-200 uppercase tracking-wide font-semibold mb-1">Total</span>
-                  <span className="text-2xl font-extrabold text-white tabular-nums">{totalStockForProduct(ledgerProduct.id)}</span>
+                <div className="flex flex-col items-center bg-white border border-gray-200 rounded-xl px-5 py-3 shadow-sm min-w-[110px]">
+                  <span className="text-xs text-gray-400 uppercase tracking-wide font-semibold mb-1">Office</span>
+                  <span className="text-2xl font-extrabold text-blue-700 tabular-nums">{ledger.reduce((sum, item) => sum + (item.transaction_type === 'inward' ? item.quantity : -item.quantity), 0)}</span>
                 </div>
               </div>
             </div>

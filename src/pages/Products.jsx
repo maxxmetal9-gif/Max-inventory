@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../supabase";
+import { OFFICE_LOCATION_ID } from "../constants";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -83,7 +84,6 @@ const subtleButton = {
 export default function Products() {
   const [products, setProducts] = useState([]);
   const [stockMap, setStockMap] = useState({});
-  const [locations, setLocations] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -120,7 +120,7 @@ export default function Products() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      await Promise.all([loadProducts(), loadLocations(), loadStockFromTransactions()]);
+      await Promise.all([loadProducts(), loadStockFromTransactions()]);
     } finally {
       setLoading(false);
     }
@@ -139,11 +139,6 @@ export default function Products() {
     }
 
     setProducts((data || []).map(normalizeProductRow));
-  };
-
-  const loadLocations = async () => {
-    const { data, error } = await supabase.from("locations").select("*");
-    if (!error) setLocations(data || []);
   };
 
   const loadStockFromTransactions = async () => {
@@ -175,21 +170,12 @@ export default function Products() {
     setStockMap(map);
   };
 
-  const stockByLocation = useCallback(
-    (productUUID, locationUUID) => safeStock(stockMap[productUUID]?.[locationUUID]),
-    [stockMap]
-  );
-
   const totalStock = useCallback(
     (productUUID) => safeStock(Object.values(stockMap[productUUID] || {}).reduce((s, v) => s + v, 0)),
     [stockMap]
   );
 
-  const getLocationId = (name) =>
-    locations.find((l) => l.name?.toLowerCase() === name.toLowerCase())?.id;
-
-  const officeStock = (uuid) => stockByLocation(uuid, getLocationId("office"));
-  const warehouseStock = (uuid) => stockByLocation(uuid, getLocationId("warehouse"));
+  const officeStock = (uuid) => safeStock(stockMap[uuid]?.[OFFICE_LOCATION_ID]);
 
   const openLedger = async (product) => {
     setSelectedProduct(product);
@@ -293,27 +279,20 @@ export default function Products() {
     const qty = Number(stockForm.quantity);
     if (isNaN(qty) || qty < 0) return;
 
-    const locs =
-      stockModal.mode === "both"
-        ? locations.filter((l) => ["office", "warehouse"].includes(l.name?.toLowerCase()))
-        : locations.filter((l) => l.name?.toLowerCase() === stockModal.mode.toLowerCase());
+    const { error } = await supabase.from("transactions").insert([
+      {
+        product_id: stockModal.product.id,
+        location_id: OFFICE_LOCATION_ID,
+        transaction_type: "inward",
+        quantity: qty,
+        notes: stockForm.notes || null,
+        party: stockForm.party || null,
+      },
+    ]);
 
-    for (const loc of locs) {
-      const { error } = await supabase.from("transactions").insert([
-        {
-          product_id: stockModal.product.id,
-          location_id: loc.id,
-          transaction_type: "inward",
-          quantity: qty,
-          notes: stockForm.notes || null,
-          party: stockForm.party || null,
-        },
-      ]);
-
-      if (error) {
-        alert(error.message);
-        return;
-      }
+    if (error) {
+      alert(error.message);
+      return;
     }
 
     setStockModal(null);
@@ -327,9 +306,7 @@ export default function Products() {
     const data = products.map((p) => ({
       ProductID: p.productid || "",
       ProductName: p.productname || "",
-      Office: officeStock(p.id),
-      Warehouse: warehouseStock(p.id),
-      Total: totalStock(p.id),
+      Stock: officeStock(p.id),
       LowAlert: p.low_stock_alert || "",
     }));
 
@@ -347,8 +324,6 @@ export default function Products() {
       p.productid || "—",
       p.productname || "",
       officeStock(p.id),
-      warehouseStock(p.id),
-      totalStock(p.id),
       p.low_stock_alert || "—",
     ]);
 
@@ -360,7 +335,7 @@ export default function Products() {
 
     doc.autoTable({
       startY: 24,
-      head: [["Product ID", "Name", "Office", "Warehouse", "Total", "Alert"]],
+      head: [["Product ID", "Name", "Stock", "Alert"]],
       body: rows,
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [42, 45, 51] },
@@ -377,7 +352,7 @@ export default function Products() {
         productname: "Example Product 25NB",
         stock: 100,
         low_stock_alert: 10,
-        location: "warehouse",
+        location: "office",
       },
     ]);
     const wb = XLSX.utils.book_new();
@@ -487,18 +462,9 @@ export default function Products() {
         const productUUID = nameToId[row.productname];
         if (!productUUID) continue;
 
-        let locId = null;
-        if (row._location) {
-          const matched = locations.find((l) => l.name?.toLowerCase() === row._location);
-          if (matched) locId = matched.id;
-        }
-
-        if (!locId && locations.length > 0) locId = locations[0].id;
-        if (!locId) continue;
-
         txns.push({
           product_id: productUUID,
-          location_id: locId,
+          location_id: OFFICE_LOCATION_ID,
           transaction_type: "inward",
           quantity: row._stock,
           notes: "Bulk upload opening stock",
@@ -769,17 +735,14 @@ export default function Products() {
                 <tr style={{ color: MM.gunmetal }}>
                   <th className="px-4 py-3 text-left">Product ID</th>
                   <th className="px-4 py-3 text-left">Product Name</th>
-                  <th className="px-4 py-3 text-center">Office</th>
-                  <th className="px-4 py-3 text-center">Warehouse</th>
-                  <th className="px-4 py-3 text-center">Total</th>
+                  <th className="px-4 py-3 text-center">Stock</th>
                   <th className="px-4 py-3 text-center">Low Alert</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((p, idx) => {
-                  const office = officeStock(p.id);
-                  const warehouse = warehouseStock(p.id);
+                  const stock = officeStock(p.id);
                   const total = totalStock(p.id);
                   const isLow = p.low_stock_alert && total <= Number(p.low_stock_alert);
                   const isEditing = editingId === p.id;
@@ -832,12 +795,7 @@ export default function Products() {
 
                       <td className="px-4 py-3 text-center">
                         <span className="inline-block px-2.5 py-0.5 rounded-full font-semibold tabular-nums" style={{ background: MM.smoke, color: MM.steel }}>
-                          {office}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span className="inline-block px-2.5 py-0.5 rounded-full font-semibold tabular-nums" style={{ background: MM.smoke, color: MM.steel }}>
-                          {warehouse}
+                          {stock}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center font-bold tabular-nums" style={{ color: MM.charcoal }}>
@@ -882,20 +840,12 @@ export default function Products() {
                           ) : (
                             <>
                               <button
-                                onClick={() => setStockModal({ product: p, mode: "office" })}
+                                onClick={() => setStockModal({ product: p })}
                                 className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg transition text-xs font-bold whitespace-nowrap"
                                 style={{ background: MM.smoke, color: MM.black, border: `1px solid ${MM.lightSilver}` }}
-                                title="Add to Office"
+                                title="Add stock"
                               >
-                                O
-                              </button>
-                              <button
-                                onClick={() => setStockModal({ product: p, mode: "warehouse" })}
-                                className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg transition text-xs font-bold whitespace-nowrap"
-                                style={{ background: MM.smoke, color: MM.black, border: `1px solid ${MM.lightSilver}` }}
-                                title="Add to Warehouse"
-                              >
-                                W
+                                + Stock
                               </button>
                               <button
                                 onClick={() => startEdit(p)}
@@ -933,7 +883,7 @@ export default function Products() {
               Add Stock
             </h3>
             <p className="text-xs mb-4 truncate" style={{ color: MM.gunmetal }}>
-              {stockModal.product.productname} <span className="font-semibold capitalize">{stockModal.mode}</span>
+              {stockModal.product.productname} <span className="font-semibold">Office</span>
             </p>
             <div className="space-y-3">
               <div>

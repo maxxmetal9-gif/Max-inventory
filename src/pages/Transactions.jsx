@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { supabase } from '../supabase';
+import { OFFICE_LOCATION_ID } from '../constants';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -278,12 +279,10 @@ const TYPEFILTERS = [
 
 export default function Transactions() {
   const [products, setProducts] = useState([]);
-  const [locations, setLocations] = useState([]);
   const [productMap, setProductMap] = useState({});
   const [transactions, setTransactions] = useState([]);
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState('all');
-  const [filterLocation, setFilterLocation] = useState('all');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [loading, setLoading] = useState(true);
@@ -295,21 +294,17 @@ export default function Transactions() {
   const [page, setPage] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [allTypeCounts, setAllTypeCounts] = useState({ all: 0, inward: 0, outward: 0 });
-  const [form, setForm] = useState({ productid: '', locationid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
+  const [form, setForm] = useState({ productid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
   const [saving, setSaving] = useState(false);
   const PAGESIZE = 50;
 
   const fetchDropdowns = useCallback(async () => {
-    const [{ data: prod }, { data: loc }] = await Promise.all([
-      supabase.from('products').select('id, productid:product_id, productname:product_name').order('product_name', { ascending: true }),
-      supabase.from('locations').select('id, name').order('name', { ascending: true }),
-    ]);
+    const { data: prod } = await supabase.from('products').select('id, productid:product_id, productname:product_name').order('product_name', { ascending: true });
     const pList = prod || [];
     setProducts(pList);
     const map = {};
     pList.forEach((p) => { map[p.id] = p; });
     setProductMap(map);
-    setLocations(loc || []);
   }, []);
 
   const fetchTypeCounts = useCallback(async () => {
@@ -331,7 +326,7 @@ export default function Transactions() {
       let query = supabase.from('transactions').select(`id, productid:product_id, locationid:location_id, transactiontype:transaction_type, quantity, party, notes, createdat:created_at, createdbyemail:created_by_email, ${joinType}`, { count: 'exact' }).order('created_at', { ascending: false }).range(from, to);
 
       if (filterType !== 'all') query = query.eq('transaction_type', filterType);
-      if (filterLocation !== 'all') query = query.eq('location_id', filterLocation);
+      query = query.eq('location_id', OFFICE_LOCATION_ID);
       const utcFrom = localDateToUTCRange(filterDateFrom, false);
       const utcTo = localDateToUTCRange(filterDateTo, true);
       if (utcFrom) query = query.gte('created_at', utcFrom);
@@ -347,11 +342,11 @@ export default function Transactions() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, filterType, filterLocation, filterDateFrom, filterDateTo]);
+  }, [page, search, filterType, filterDateFrom, filterDateTo]);
 
   useEffect(() => { fetchDropdowns(); fetchTypeCounts(); }, [fetchDropdowns, fetchTypeCounts]);
   useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
-  useEffect(() => { setPage(0); }, [search, filterType, filterLocation, filterDateFrom, filterDateTo]);
+  useEffect(() => { setPage(0); }, [search, filterType, filterDateFrom, filterDateTo]);
 
   useEffect(() => {
     (async () => {
@@ -375,8 +370,8 @@ export default function Transactions() {
   const toggleDate = (key) => setOpenDates((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const handleSave = async () => {
-    if (!form.productid || !form.locationid || !form.quantity) {
-      alert('Please fill required fields Product, Location, Quantity');
+    if (!form.productid || !form.quantity) {
+      alert('Please select a product and quantity');
       return;
     }
     try {
@@ -384,7 +379,7 @@ export default function Transactions() {
       const { data: userData } = await supabase.auth.getUser();
       const payload = {
         product_id: form.productid,
-        location_id: form.locationid,
+        location_id: OFFICE_LOCATION_ID,
         transaction_type: form.transactiontype,
         quantity: Number(form.quantity),
         party: form.party || null,
@@ -395,7 +390,7 @@ export default function Transactions() {
         ? await supabase.from('transactions').update(payload).eq('id', editingId)
         : await supabase.from('transactions').insert(payload);
       if (error) throw error;
-      setForm({ productid: '', locationid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
+      setForm({ productid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
       setEditingId(null);
       setShowForm(false);
       setPage(0);
@@ -409,14 +404,14 @@ export default function Transactions() {
   };
 
   const handleEditClick = (t) => {
-    setForm({ productid: t.productid, locationid: t.locationid, transactiontype: t.transactiontype, quantity: t.quantity, party: t.party || '', notes: t.notes || '' });
+    setForm({ productid: t.productid, transactiontype: t.transactiontype, quantity: t.quantity, party: t.party || '', notes: t.notes || '' });
     setEditingId(t.id);
     setShowForm(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const cancelEdit = () => {
-    setForm({ productid: '', locationid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
+    setForm({ productid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' });
     setEditingId(null);
     setShowForm(false);
   };
@@ -436,7 +431,7 @@ export default function Transactions() {
         Product: getProductName(t),
         Type: t.transactiontype?.toUpperCase(),
         Quantity: t.quantity,
-        Location: locations.find((l) => l.id === t.locationid)?.name || '-',
+        Location: 'Office',
         Party: t.party || '-',
         Notes: t.notes || '-',
         Employee: t.createdbyemail || 'System',
@@ -470,7 +465,7 @@ export default function Transactions() {
         getProductName(t),
         t.transactiontype?.toUpperCase(),
         t.quantity,
-        locations.find((l) => l.id === t.locationid)?.name || '-',
+        'Office',
         t.party || '-',
         t.notes || '-',
         t.createdbyemail || 'System',
@@ -516,7 +511,7 @@ export default function Transactions() {
         <div className="flex gap-2 flex-wrap">
           <button onClick={exportToExcel} style={{ background: '#0D7A5F' }} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm">Excel</button>
           <button onClick={exportToPDF} style={{ background: ACCENT2 }} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm">PDF</button>
-          <button onClick={() => { setShowForm((v) => !v); setEditingId(null); setForm({ productid: '', locationid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' }); }} style={{ background: showForm ? '#6B7280' : ACCENT }} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm">{showForm ? 'Cancel' : 'Add Transaction'}</button>
+          <button onClick={() => { setShowForm((v) => !v); setEditingId(null); setForm({ productid: '', transactiontype: 'inward', quantity: '', party: '', notes: '' }); }} style={{ background: showForm ? '#6B7280' : ACCENT }} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm">{showForm ? 'Cancel' : 'Add Transaction'}</button>
         </div>
       </div>
 
@@ -530,10 +525,9 @@ export default function Transactions() {
             <ProductPicker products={products} value={form.productid} onChange={(v) => setForm((f) => ({ ...f, productid: v }))} />
             <div>
               <label className="block text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: PRIMARY }}>Location</label>
-              <select value={form.locationid} onChange={(e) => setForm((f) => ({ ...f, locationid: e.target.value }))} className="w-full rounded-xl border-2 px-4 py-3 text-sm font-medium focus:outline-none" style={{ borderColor: form.locationid ? PRIMARY : '#D1D5DB' }}>
-                <option value="">Select location</option>
-                {locations.map((loc) => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
-              </select>
+              <div className="w-full rounded-xl border-2 px-4 py-3 text-sm font-medium" style={{ borderColor: '#D1D5DB', background: '#F9FAFB' }}>
+                Office
+              </div>
             </div>
             <div>
               <label className="block text-xs font-black uppercase tracking-widest mb-1.5" style={{ color: PRIMARY }}>Type</label>
@@ -573,11 +567,6 @@ export default function Transactions() {
         {TYPEFILTERS.map((f) => (
           <button key={f.key} onClick={() => setFilterType(f.key)} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border-2 transition-all" style={{ background: filterType === f.key ? f.color : f.light, color: filterType === f.key ? 'white' : f.color, borderColor: filterType === f.key ? f.color : 'transparent' }}>
             <span style={{ fontSize: '0.6rem' }}>●</span> {f.label} <span className="ml-1 text-xs opacity-80">{f.key === 'all' ? totalCount.toLocaleString() : allTypeCounts[f.key].toLocaleString()}</span>
-          </button>
-        ))}
-        {locations.map((loc) => (
-          <button key={loc.id} onClick={() => setFilterLocation((prev) => (prev === loc.id ? 'all' : loc.id))} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-bold border-2 transition-all" style={{ background: filterLocation === loc.id ? ACCENT : '#FEF0E7', color: filterLocation === loc.id ? 'white' : ACCENT, borderColor: filterLocation === loc.id ? ACCENT : 'transparent' }}>
-            <span style={{ fontSize: '0.6rem' }}>●</span> {loc.name}
           </button>
         ))}
       </div>
@@ -621,7 +610,7 @@ export default function Transactions() {
                       <tbody>
                         {group.map((t, i) => {
                           const productName = getProductName(t);
-                          const locationName = locations.find((l) => l.id === t.locationid)?.name || '-';
+                          const locationName = 'Office';
                           const isEven = i % 2 === 0;
                           return (
                             <tr key={t.id} style={{ background: isEven ? 'white' : '#FAFAFA', borderBottom: '1px solid #F3F4F6' }} className="hover:bg-blue-50/30 transition-colors">
