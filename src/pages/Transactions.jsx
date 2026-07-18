@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import supabase from '../supabase';
+import { supabase } from '../supabase';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -699,3 +699,4 @@ export default function Transactions() {
     </div>
   );
 }
+
