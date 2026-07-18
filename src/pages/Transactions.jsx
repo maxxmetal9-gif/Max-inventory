@@ -301,7 +301,7 @@ export default function Transactions() {
 
   const fetchDropdowns = useCallback(async () => {
     const [{ data: prod }, { data: loc }] = await Promise.all([
-      supabase.from('products').select('id, productid, productname').order('productname', { ascending: true }),
+      supabase.from('products').select('id, productid:product_id, productname:product_name').order('product_name', { ascending: true }),
       supabase.from('locations').select('id, name').order('name', { ascending: true }),
     ]);
     const pList = prod || [];
@@ -327,7 +327,7 @@ export default function Transactions() {
       const from = page * PAGESIZE;
       const to = from + PAGESIZE - 1;
       const searchTerm = search.trim();
-      const joinType = searchTerm ? 'products!inner(id, productname, productid)' : 'products(id, productname, productid)';
+      const joinType = searchTerm ? 'products!inner(id, productname:product_name, productid:product_id)' : 'products(id, productname:product_name, productid:product_id)';
       let query = supabase.from('transactions').select(`id, productid, locationid, transactiontype, quantity, party, notes, createdat, createdbyemail, ${joinType}`, { count: 'exact' }).order('createdat', { ascending: false }).range(from, to);
 
       if (filterType !== 'all') query = query.eq('transactiontype', filterType);
@@ -336,7 +336,7 @@ export default function Transactions() {
       const utcTo = localDateToUTCRange(filterDateTo, true);
       if (utcFrom) query = query.gte('createdat', utcFrom);
       if (utcTo) query = query.lte('createdat', utcTo);
-      if (searchTerm) query = query.or(`party.ilike.%${searchTerm}%,notes.ilike.%${searchTerm}%,products.productname.ilike.%${searchTerm}%,products.productid.ilike.%${searchTerm}%`);
+      if (searchTerm) query = query.or(`party.ilike.%${searchTerm}%,notes.ilike.%${searchTerm}%,products.product_name.ilike.%${searchTerm}%,products.product_id.ilike.%${searchTerm}%`);
 
       const { data, count, error } = await query;
       if (error) throw error;
@@ -428,7 +428,7 @@ export default function Transactions() {
 
   const exportToExcel = async () => {
     try {
-      const { data: allTrans } = await supabase.from('transactions').select('createdat, productid, transactiontype, quantity, locationid, party, notes, createdbyemail, products(id, productname, productid)').order('createdat', { ascending: false });
+      const { data: allTrans } = await supabase.from('transactions').select('createdat, productid, transactiontype, quantity, locationid, party, notes, createdbyemail, products(id, productname:product_name, productid:product_id)').order('createdat', { ascending: false });
       const exportData = (allTrans || []).map((t) => ({
         'Date IST': formatIST(t.createdat),
         Product: getProductName(t),
@@ -450,7 +450,7 @@ export default function Transactions() {
 
   const exportToPDF = async () => {
     try {
-      const { data: allTrans, error } = await supabase.from('transactions').select('createdat, productid, transactiontype, quantity, locationid, party, notes, createdbyemail, products(id, productname, productid)').order('createdat', { ascending: false });
+      const { data: allTrans, error } = await supabase.from('transactions').select('createdat, productid, transactiontype, quantity, locationid, party, notes, createdbyemail, products(id, productname:product_name, productid:product_id)').order('createdat', { ascending: false });
       if (error) throw error;
       const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
       const pageW = doc.internal.pageSize.getWidth();
@@ -699,4 +699,3 @@ export default function Transactions() {
     </div>
   );
 }
-

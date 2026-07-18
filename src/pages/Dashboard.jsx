@@ -94,9 +94,9 @@ export default function Dashboard() {
     try {
       const { data: productTrans, error } = await supabase
         .from("transactions")
-        .select("*, locations(name)")
-        .eq("product_id", product.id)
-        .order("created_at", { ascending: true });
+        .select("id, quantity, party, notes, createdbyemail, transaction_type:transactiontype, created_at:createdat, locations(name)")
+        .eq("productid", product.id)
+        .order("createdat", { ascending: true });
       if (error) throw error;
 
       let balance = 0;
@@ -126,7 +126,7 @@ export default function Dashboard() {
       const { data: recentTrans } = await supabase
         .from("transactions")
         .select("*, products(product_name, product_id), locations(name)")
-        .order("created_at", { ascending: false })
+        .order("createdat", { ascending: false })
         .limit(5);
 
       const { data: stockSummaryData } = await supabase
@@ -136,8 +136,8 @@ export default function Dashboard() {
       // ── Hero products: top 10 by total outward quantity (all time) ──────────
       const { data: outwardData } = await supabase
         .from("transactions")
-        .select("product_id, quantity")
-        .eq("transaction_type", "outward");
+        .select("product_id:productid, quantity")
+        .eq("transactiontype", "outward");
 
       const outwardMap = {};
       (outwardData || []).forEach(t => {
@@ -151,9 +151,9 @@ export default function Dashboard() {
 
       const { data: recentOutward } = await supabase
         .from("transactions")
-        .select("product_id")
-        .eq("transaction_type", "outward")
-        .gte("created_at", deadCutoff.toISOString());
+        .select("product_id:productid")
+        .eq("transactiontype", "outward")
+        .gte("createdat", deadCutoff.toISOString());
 
       const activeProductIds = new Set((recentOutward || []).map(t => t.product_id));
 
@@ -211,9 +211,9 @@ export default function Dashboard() {
       cutoffUTC.setUTCHours(0, 0, 0, 0);
       const { data: recentActivity } = await supabase
         .from("transactions")
-        .select("transaction_type, quantity, created_at")
-        .gte("created_at", cutoffUTC.toISOString())
-        .order("created_at", { ascending: true });
+        .select("transaction_type:transactiontype, quantity, created_at:createdat")
+        .gte("createdat", cutoffUTC.toISOString())
+        .order("createdat", { ascending: true });
 
       const dailyMap = {};
       last7Days.forEach(label => { dailyMap[label] = { name: label, inward: 0, outward: 0 }; });
