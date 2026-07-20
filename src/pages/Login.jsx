@@ -34,8 +34,8 @@ export default function Login() {
 
       if (profileError) throw profileError;
 
-      const rawIDs = profile.allowed_device_id || [];
-      const allowedIDs = rawIDs.filter((id) => id !== null && id !== "null");
+      const rawIDs = Array.isArray(profile?.allowed_device_id) ? profile.allowed_device_id : [];
+      const allowedIDs = rawIDs.filter((id) => id && id !== "null");
       const userEmail = profile.email;
 
       let deviceLimit = 1;

@@ -45,7 +45,9 @@ function NavBar({ session, deviceApproved, onSignOut }) {
         })}
       </div>
       <div className="flex items-center gap-3 ml-3 shrink-0">
-        <span className="text-xs text-gray-400 hidden lg:block truncate max-w-[160px]">{session.user.email}</span>
+        <span className="text-xs text-gray-400 hidden lg:block truncate max-w-[160px]">
+          {session.user.email}
+        </span>
         <button
           onClick={onSignOut}
           className="bg-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
@@ -61,7 +63,6 @@ function ProtectedRoute({ session, deviceApproved, children }) {
   if (!session || !deviceApproved) {
     return <Navigate to="/login" replace />;
   }
-
   return children;
 }
 
@@ -96,19 +97,17 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const restoreSession = async () => {
-      const { data: { session: savedSession } } = await supabase.auth.getSession();
-
-      if (!savedSession) {
+    const syncSession = async (nextSession) => {
+      if (!nextSession) {
         clearStoredUserData();
         setSession(null);
         setDeviceApproved(false);
-        setLoading(false);
         return;
       }
 
       try {
-        const approved = await isDeviceApprovedForUser(savedSession.user.id);
+        const approved = await isDeviceApprovedForUser(nextSession.user.id);
+
         if (!approved) {
           await supabase.auth.signOut({ scope: "local" });
           clearStoredUserData();
@@ -117,7 +116,7 @@ export default function App() {
           return;
         }
 
-        setSession(savedSession);
+        setSession(nextSession);
         setDeviceApproved(true);
       } catch (error) {
         console.error("Unable to verify device approval:", error);
@@ -125,28 +124,52 @@ export default function App() {
         clearStoredUserData();
         setSession(null);
         setDeviceApproved(false);
-      } finally {
-        setLoading(false);
       }
     };
 
+    const restoreSession = async () => {
+      const {
+        data: { session: savedSession },
+      } = await supabase.auth.getSession();
+
+      await syncSession(savedSession);
+      setLoading(false);
+    };
+
     restoreSession();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
       if (event === "SIGNED_OUT" || !nextSession) {
         clearStoredUserData();
         setSession(null);
         setDeviceApproved(false);
+        return;
+      }
+
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+        await syncSession(nextSession);
       }
     });
+
     return () => subscription.unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut({ scope: "local" });
     clearStoredUserData();
+    setSession(null);
+    setDeviceApproved(false);
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500 font-bold">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-500 font-bold">
+        Loading...
+      </div>
+    );
+  }
 
   return (
     <Router>
