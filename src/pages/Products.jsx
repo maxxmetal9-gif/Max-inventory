@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { supabase } from "../supabase";
 import { OFFICE_LOCATION_ID } from "../constants";
 import * as XLSX from "xlsx";
@@ -6,19 +6,47 @@ import jsPDF from "jspdf";
 import "jspdf-autotable";
 
 const MM = {
-  black: "#0f0f10",
-  charcoal: "#1b1c1f",
-  steel: "#2a2d33",
-  gunmetal: "#5f6670",
-  silver: "#b8bec7",
-  lightSilver: "#d9dde3",
-  smoke: "#eef1f4",
-  white: "#ffffff",
+  bg: "#0f1115",
+  bgSoft: "#151922",
+  surface: "#181d27",
+  surface2: "#1f2633",
+  surface3: "#263041",
+  border: "#313b4d",
+  borderSoft: "#3b465a",
+  text: "#f3f6fc",
+  textMuted: "#aab4c5",
+  textSoft: "#8a94a6",
+  accent: "#60a5fa",
+  accentSoft: "#1d4ed8",
+  successBg: "#0f2a1f",
+  successText: "#86efac",
+  warningBg: "#3a2a12",
+  warningText: "#facc15",
+  dangerBg: "#3a1d24",
+  dangerText: "#fda4af",
+  chipBg: "#222b39",
+  overlay: "rgba(2, 6, 23, 0.72)",
 };
 
 function safeStock(v) {
   const n = Number(v) || 0;
   return Object.is(n, -0) ? 0 : n;
+}
+
+function formatQty(value) {
+  const n = safeStock(value);
+  return `${n.toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })} kg`;
+}
+
+function formatQtyPlain(value) {
+  const n = safeStock(value);
+  return n.toLocaleString("en-IN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatDateTime(iso) {
@@ -59,26 +87,27 @@ const normalizeProductRow = (row = {}) => ({
 });
 
 const cardStyle = {
-  background: MM.white,
-  border: `1px solid ${MM.lightSilver}`,
+  background: MM.surface,
+  border: `1px solid ${MM.border}`,
   borderRadius: 16,
-  boxShadow: "0 8px 24px rgba(15,15,16,0.05)",
+  boxShadow: "0 20px 45px rgba(0,0,0,0.28)",
 };
 
 const inputStyle = {
   width: "100%",
-  border: `1px solid ${MM.lightSilver}`,
+  border: `1px solid ${MM.borderSoft}`,
   borderRadius: 12,
   padding: "10px 12px",
   fontSize: 14,
-  color: MM.black,
-  background: MM.white,
+  color: MM.text,
+  background: MM.surface2,
+  outline: "none",
 };
 
 const subtleButton = {
-  border: `1px solid ${MM.lightSilver}`,
-  background: MM.white,
-  color: MM.gunmetal,
+  border: `1px solid ${MM.borderSoft}`,
+  background: MM.surface2,
+  color: MM.textMuted,
 };
 
 export default function Products() {
@@ -258,10 +287,7 @@ export default function Products() {
     };
     console.log("Products.jsx edit product payload:", JSON.stringify(payload));
 
-    const { error } = await supabase
-      .from("products")
-      .update(payload)
-      .eq("id", id);
+    const { error } = await supabase.from("products").update(payload).eq("id", id);
 
     if (error) {
       console.error("Products.jsx - save edit error:", error);
@@ -306,8 +332,8 @@ export default function Products() {
     const data = products.map((p) => ({
       ProductID: p.productid || "",
       ProductName: p.productname || "",
-      Stock: officeStock(p.id),
-      LowAlert: p.low_stock_alert || "",
+      StockKg: formatQtyPlain(officeStock(p.id)),
+      LowAlertKg: p.low_stock_alert ? formatQtyPlain(p.low_stock_alert) : "",
     }));
 
     const ws = XLSX.utils.json_to_sheet(data);
@@ -323,11 +349,11 @@ export default function Products() {
     const rows = products.map((p) => [
       p.productid || "—",
       p.productname || "",
-      officeStock(p.id),
-      p.low_stock_alert || "—",
+      formatQty(officeStock(p.id)),
+      p.low_stock_alert ? formatQty(p.low_stock_alert) : "—",
     ]);
 
-    doc.setFillColor(15, 15, 16);
+    doc.setFillColor(15, 23, 42);
     doc.rect(0, 0, 297, 18, "F");
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(13);
@@ -338,8 +364,8 @@ export default function Products() {
       head: [["Product ID", "Name", "Stock", "Alert"]],
       body: rows,
       styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [42, 45, 51] },
-      alternateRowStyles: { fillColor: [238, 241, 244] },
+      headStyles: { fillColor: [31, 41, 55] },
+      alternateRowStyles: { fillColor: [241, 245, 249] },
     });
 
     doc.save(`Products_${new Date().toISOString().slice(0, 10)}.pdf`);
@@ -350,8 +376,8 @@ export default function Products() {
       {
         productid: "MM-001",
         productname: "Example Product 25NB",
-        stock: 100,
-        low_stock_alert: 10,
+        stock: 100.5,
+        low_stock_alert: 10.5,
         location: "office",
       },
     ]);
@@ -421,11 +447,13 @@ export default function Products() {
     setBulkSaving(true);
     const chunk = 50;
 
-    const productPayloads = bulkRows.map(({ _stock, _location, ...rest }) => ({
-      product_id: rest.productid ?? rest.product_id ?? null,
-      product_name: rest.productname ?? rest.product_name ?? null,
-      low_stock_alert: rest.low_stock_alert ?? rest.lowstockalert ?? null,
-    })).filter((row) => row.product_name || row.product_id);
+    const productPayloads = bulkRows
+      .map(({ _stock, _location, ...rest }) => ({
+        product_id: rest.productid ?? rest.product_id ?? null,
+        product_name: rest.productname ?? rest.product_name ?? null,
+        low_stock_alert: rest.low_stock_alert ?? rest.lowstockalert ?? null,
+      }))
+      .filter((row) => row.product_name || row.product_id);
 
     for (let i = 0; i < productPayloads.length; i += chunk) {
       const payload = productPayloads.slice(i, i + chunk);
@@ -444,7 +472,9 @@ export default function Products() {
     const rowsWithStock = bulkRows.filter((r) => r._stock !== null && r._stock > 0);
 
     if (rowsWithStock.length > 0) {
-      const { data: freshProducts, error: freshProductsError } = await supabase.from("products").select("id, productname:product_name");
+      const { data: freshProducts, error: freshProductsError } = await supabase
+        .from("products")
+        .select("id, productname:product_name");
       if (freshProductsError) {
         console.error("Products.jsx - bulk refresh products error:", freshProductsError);
         setBulkSaving(false);
@@ -506,26 +536,34 @@ export default function Products() {
   );
 
   return (
-    <div style={{ background: MM.smoke, minHeight: "100vh", color: MM.black }} className="p-4 md:p-6 max-w-screen-xl mx-auto">
+    <div
+      style={{ background: MM.bg, minHeight: "100vh", color: MM.text }}
+      className="p-4 md:p-6 max-w-screen-xl mx-auto"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3 mb-6">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <div style={{ background: MM.black, borderRadius: 10 }} className="w-9 h-9 flex items-center justify-center">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={MM.white} strokeWidth="2">
+            <div
+              style={{ background: MM.surface3, borderRadius: 10, border: `1px solid ${MM.borderSoft}` }}
+              className="w-9 h-9 flex items-center justify-center"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={MM.text} strokeWidth="2">
                 <rect x="2" y="3" width="20" height="14" rx="2" />
                 <path d="M8 21h8M12 17v4" />
               </svg>
             </div>
-            <h1 style={{ color: MM.black }} className="text-2xl md:text-3xl font-black tracking-tight">
+            <h1 style={{ color: MM.text }} className="text-2xl md:text-3xl font-black tracking-tight">
               Products Catalog
             </h1>
           </div>
-          <p className="ml-12 text-sm" style={{ color: MM.gunmetal }}>
-            <span className="font-semibold" style={{ color: MM.charcoal }}>{products.length}</span> products
+          <p className="ml-12 text-sm" style={{ color: MM.textMuted }}>
+            <span className="font-semibold" style={{ color: MM.text }}>{products.length}</span> products
             {lowStockCount > 0 && (
               <>
                 <span className="mx-1">·</span>
-                <span className="font-semibold" style={{ color: MM.steel }}>{lowStockCount} low stock</span>
+                <span className="font-semibold" style={{ color: MM.warningText }}>
+                  {lowStockCount} low stock
+                </span>
               </>
             )}
           </p>
@@ -534,28 +572,35 @@ export default function Products() {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={handleExportExcel}
-            style={{ background: MM.steel, color: MM.white }}
+            style={{ background: MM.accentSoft, color: MM.text }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm"
           >
             Excel
           </button>
           <button
             onClick={handleExportPDF}
-            style={{ background: MM.charcoal, color: MM.white }}
+            style={{ background: MM.surface3, color: MM.text, border: `1px solid ${MM.borderSoft}` }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm"
           >
             PDF
           </button>
           <button
             onClick={() => setShowBulk((v) => !v)}
-            style={{ background: showBulk ? MM.gunmetal : MM.charcoal, color: MM.white }}
+            style={{
+              background: showBulk ? MM.surface3 : MM.surface2,
+              color: MM.text,
+              border: `1px solid ${MM.borderSoft}`,
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm"
           >
             {showBulk ? "✕ Close" : "Bulk Upload"}
           </button>
           <button
             onClick={() => setShowAddForm((v) => !v)}
-            style={{ background: showAddForm ? MM.gunmetal : MM.black, color: MM.white }}
+            style={{
+              background: showAddForm ? MM.surface3 : MM.text,
+              color: showAddForm ? MM.text : MM.bg,
+            }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90 transition shadow-sm"
           >
             {showAddForm ? "✕ Cancel" : "+ Add Product"}
@@ -566,7 +611,7 @@ export default function Products() {
       {showBulk && (
         <div className="p-5 mb-5" style={cardStyle}>
           <div className="flex items-center justify-between mb-3">
-            <h3 className="font-black text-base" style={{ color: MM.black }}>
+            <h3 className="font-black text-base" style={{ color: MM.text }}>
               Bulk Upload Products
             </h3>
             <button
@@ -577,8 +622,9 @@ export default function Products() {
               Download Template
             </button>
           </div>
-          <p className="text-xs mb-3" style={{ color: MM.gunmetal }}>
-            Upload Excel or CSV with columns <code>productid</code>, <code>productname</code>, <code>stock</code>, <code>low_stock_alert</code>, <code>location</code>.
+          <p className="text-xs mb-3" style={{ color: MM.textMuted }}>
+            Upload Excel or CSV with columns <code>productid</code>, <code>productname</code>, <code>stock</code>,{" "}
+            <code>low_stock_alert</code>, <code>location</code>. Stock and alerts are treated as kg and can include decimals.
           </p>
           <input
             ref={fileRef}
@@ -586,13 +632,16 @@ export default function Products() {
             accept=".xlsx,.csv,.xls"
             onChange={handleBulkFile}
             className="block w-full text-sm mb-3"
-            style={{ color: MM.gunmetal }}
+            style={{ color: MM.textMuted }}
           />
 
           {bulkErrors.length > 0 && (
-            <div className="rounded-lg p-3 mb-3" style={{ background: MM.smoke, border: `1px solid ${MM.lightSilver}` }}>
+            <div
+              className="rounded-lg p-3 mb-3"
+              style={{ background: MM.dangerBg, border: `1px solid ${MM.borderSoft}` }}
+            >
               {bulkErrors.map((e, i) => (
-                <p key={i} className="text-xs" style={{ color: MM.black }}>
+                <p key={i} className="text-xs" style={{ color: MM.dangerText }}>
                   {e}
                 </p>
               ))}
@@ -601,28 +650,32 @@ export default function Products() {
 
           {bulkRows.length > 0 && (
             <>
-              <p className="text-xs mb-2 font-semibold" style={{ color: MM.gunmetal }}>
+              <p className="text-xs mb-2 font-semibold" style={{ color: MM.textMuted }}>
                 {bulkRows.length} rows ready to import
               </p>
-              <div className="overflow-x-auto max-h-52 rounded-lg mb-3" style={{ border: `1px solid ${MM.lightSilver}` }}>
+              <div className="overflow-x-auto max-h-52 rounded-lg mb-3" style={{ border: `1px solid ${MM.border}` }}>
                 <table className="w-full text-xs">
-                  <thead style={{ background: MM.smoke }}>
+                  <thead style={{ background: MM.surface2 }}>
                     <tr>
-                      <th className="px-3 py-2 text-left" style={{ color: MM.gunmetal }}>Product ID</th>
-                      <th className="px-3 py-2 text-left" style={{ color: MM.gunmetal }}>Product Name</th>
-                      <th className="px-3 py-2 text-left" style={{ color: MM.gunmetal }}>Stock</th>
-                      <th className="px-3 py-2 text-left" style={{ color: MM.gunmetal }}>Low Alert</th>
-                      <th className="px-3 py-2 text-left" style={{ color: MM.gunmetal }}>Location</th>
+                      <th className="px-3 py-2 text-left" style={{ color: MM.textMuted }}>Product ID</th>
+                      <th className="px-3 py-2 text-left" style={{ color: MM.textMuted }}>Product Name</th>
+                      <th className="px-3 py-2 text-left" style={{ color: MM.textMuted }}>Stock</th>
+                      <th className="px-3 py-2 text-left" style={{ color: MM.textMuted }}>Low Alert</th>
+                      <th className="px-3 py-2 text-left" style={{ color: MM.textMuted }}>Location</th>
                     </tr>
                   </thead>
                   <tbody>
                     {bulkRows.map((r, i) => (
-                      <tr key={i} style={{ background: i % 2 === 0 ? MM.white : MM.smoke }}>
-                        <td className="px-3 py-1.5 font-mono" style={{ color: MM.gunmetal }}>{r.productid || "—"}</td>
-                        <td className="px-3 py-1.5 font-medium" style={{ color: MM.black }}>{r.productname}</td>
-                        <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r._stock ?? "—"}</td>
-                        <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r.low_stock_alert ?? "—"}</td>
-                        <td className="px-3 py-1.5" style={{ color: MM.gunmetal }}>{r._location || "—"}</td>
+                      <tr key={i} style={{ background: i % 2 === 0 ? MM.surface : MM.surface2 }}>
+                        <td className="px-3 py-1.5 font-mono" style={{ color: MM.textSoft }}>{r.productid || "—"}</td>
+                        <td className="px-3 py-1.5 font-medium" style={{ color: MM.text }}>{r.productname}</td>
+                        <td className="px-3 py-1.5" style={{ color: MM.textMuted }}>
+                          {r._stock !== null && r._stock !== undefined ? formatQty(r._stock) : "—"}
+                        </td>
+                        <td className="px-3 py-1.5" style={{ color: MM.textMuted }}>
+                          {r.low_stock_alert !== null && r.low_stock_alert !== undefined ? formatQty(r.low_stock_alert) : "—"}
+                        </td>
+                        <td className="px-3 py-1.5" style={{ color: MM.textMuted }}>{r._location || "—"}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -632,7 +685,7 @@ export default function Products() {
                 onClick={handleBulkSave}
                 disabled={bulkSaving}
                 className="px-5 py-2 rounded-lg text-sm font-bold transition disabled:opacity-50"
-                style={{ background: MM.black, color: MM.white }}
+                style={{ background: MM.text, color: MM.bg }}
               >
                 {bulkSaving ? "Importing..." : `Import ${bulkRows.length} Products`}
               </button>
@@ -643,13 +696,13 @@ export default function Products() {
 
       {showAddForm && (
         <div className="p-5 mb-5" style={cardStyle}>
-          <h3 className="font-black text-base mb-3" style={{ color: MM.black }}>
+          <h3 className="font-black text-base mb-3" style={{ color: MM.text }}>
             Add New Product
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: MM.gunmetal }}>
-                Product ID <span style={{ color: MM.silver }}>(optional)</span>
+              <label className="block text-xs font-semibold mb-1" style={{ color: MM.textMuted }}>
+                Product ID <span style={{ color: MM.textSoft }}>(optional)</span>
               </label>
               <input
                 value={form.productid}
@@ -659,8 +712,8 @@ export default function Products() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: MM.gunmetal }}>
-                Product Name <span style={{ color: MM.black }}>*</span>
+              <label className="block text-xs font-semibold mb-1" style={{ color: MM.textMuted }}>
+                Product Name <span style={{ color: MM.text }}>*</span>
               </label>
               <input
                 value={form.productname}
@@ -670,14 +723,16 @@ export default function Products() {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: MM.gunmetal }}>
+              <label className="block text-xs font-semibold mb-1" style={{ color: MM.textMuted }}>
                 Low Stock Alert
               </label>
               <input
                 type="number"
+                step="0.01"
+                min="0"
                 value={form.low_stock_alert}
                 onChange={(e) => setForm((f) => ({ ...f, low_stock_alert: e.target.value }))}
-                placeholder="e.g. 10"
+                placeholder="e.g. 10.5"
                 style={inputStyle}
               />
             </div>
@@ -687,7 +742,7 @@ export default function Products() {
               onClick={handleAddProduct}
               disabled={saving || !form.productname.trim()}
               className="px-5 py-2 rounded-lg text-sm font-bold transition disabled:opacity-50"
-              style={{ background: MM.black, color: MM.white }}
+              style={{ background: MM.text, color: MM.bg }}
             >
               {saving ? "Saving..." : "Save Product"}
             </button>
@@ -703,7 +758,7 @@ export default function Products() {
       )}
 
       <div className="relative mb-4">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MM.gunmetal} strokeWidth="2">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MM.textSoft} strokeWidth="2">
           <circle cx="11" cy="11" r="8" />
           <path d="m21 21-4.35-4.35" />
         </svg>
@@ -712,18 +767,18 @@ export default function Products() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by product ID or name..."
           className="w-full pl-9 pr-4 py-2.5 rounded-xl text-sm shadow-sm focus:outline-none"
-          style={{ border: `1px solid ${MM.lightSilver}`, background: MM.white, color: MM.black }}
+          style={{ border: `1px solid ${MM.borderSoft}`, background: MM.surface, color: MM.text }}
         />
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-20 text-sm" style={{ color: MM.gunmetal }}>
+        <div className="flex items-center justify-center py-20 text-sm" style={{ color: MM.textMuted }}>
           Loading products...
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-20">
-          <p className="font-semibold" style={{ color: MM.charcoal }}>No products found</p>
-          <p className="text-sm mt-1" style={{ color: MM.gunmetal }}>
+          <p className="font-semibold" style={{ color: MM.text }}>No products found</p>
+          <p className="text-sm mt-1" style={{ color: MM.textMuted }}>
             {search ? "Try a different search term." : "Add your first product using the button above."}
           </p>
         </div>
@@ -731,11 +786,12 @@ export default function Products() {
         <div style={cardStyle} className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead style={{ background: MM.smoke, borderBottom: `1px solid ${MM.lightSilver}` }}>
-                <tr style={{ color: MM.gunmetal }}>
+              <thead style={{ background: MM.surface2, borderBottom: `1px solid ${MM.border}` }}>
+                <tr style={{ color: MM.textMuted }}>
                   <th className="px-4 py-3 text-left">Product ID</th>
                   <th className="px-4 py-3 text-left">Product Name</th>
-                  <th className="px-4 py-3 text-center">Stock</th>
+                  <th className="px-4 py-3 text-center">Office Stock</th>
+                  <th className="px-4 py-3 text-center">Total Stock</th>
                   <th className="px-4 py-3 text-center">Low Alert</th>
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
@@ -751,11 +807,11 @@ export default function Products() {
                     <tr
                       key={p.id}
                       style={{
-                        background: isLow ? "#f5f6f8" : idx % 2 === 0 ? MM.white : MM.smoke,
-                        borderTop: `1px solid ${MM.lightSilver}`,
+                        background: isLow ? "#241b12" : idx % 2 === 0 ? MM.surface : MM.surface2,
+                        borderTop: `1px solid ${MM.border}`,
                       }}
                     >
-                      <td className="px-4 py-3 text-xs font-mono" style={{ color: MM.gunmetal }}>
+                      <td className="px-4 py-3 text-xs font-mono" style={{ color: MM.textSoft }}>
                         {isEditing ? (
                           <input
                             value={editForm.productid || ""}
@@ -767,7 +823,7 @@ export default function Products() {
                         )}
                       </td>
 
-                      <td className="px-4 py-3 font-medium" style={{ color: MM.black }}>
+                      <td className="px-4 py-3 font-medium" style={{ color: MM.text }}>
                         {isEditing ? (
                           <input
                             value={editForm.productname || ""}
@@ -778,13 +834,13 @@ export default function Products() {
                           <button
                             onClick={() => openLedger(p)}
                             className="text-left transition"
-                            style={{ color: MM.black }}
+                            style={{ color: MM.text }}
                           >
                             {p.productname}
                             {isLow && (
                               <span
                                 className="ml-2 text-xs font-bold px-1.5 py-0.5 rounded-full"
-                                style={{ background: MM.smoke, color: MM.steel, border: `1px solid ${MM.lightSilver}` }}
+                                style={{ background: MM.warningBg, color: MM.warningText, border: `1px solid ${MM.borderSoft}` }}
                               >
                                 Low
                               </span>
@@ -794,30 +850,45 @@ export default function Products() {
                       </td>
 
                       <td className="px-4 py-3 text-center">
-                        <span className="inline-block px-2.5 py-0.5 rounded-full font-semibold tabular-nums" style={{ background: MM.smoke, color: MM.steel }}>
-                          {stock}
+                        <span
+                          className="inline-block px-2.5 py-0.5 rounded-full font-semibold tabular-nums"
+                          style={{ background: MM.chipBg, color: MM.accent }}
+                        >
+                          {formatQty(stock)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center font-bold tabular-nums" style={{ color: MM.charcoal }}>
-                        {total}
+
+                      <td className="px-4 py-3 text-center font-bold tabular-nums" style={{ color: MM.text }}>
+                        {formatQty(total)}
                       </td>
+
                       <td className="px-4 py-3 text-center">
                         {isEditing ? (
                           <input
                             type="number"
+                            step="0.01"
+                            min="0"
                             value={editForm.low_stock_alert || ""}
                             onChange={(e) => setEditForm((f) => ({ ...f, low_stock_alert: e.target.value }))}
-                            style={{ ...inputStyle, width: 70, margin: "0 auto", padding: "6px 8px", textAlign: "center", fontSize: 12 }}
+                            style={{
+                              ...inputStyle,
+                              width: 90,
+                              margin: "0 auto",
+                              padding: "6px 8px",
+                              textAlign: "center",
+                              fontSize: 12,
+                            }}
                           />
                         ) : (
                           <span
                             className="px-2.5 py-0.5 rounded-full text-xs font-semibold"
-                            style={{ background: MM.smoke, color: MM.gunmetal }}
+                            style={{ background: MM.surface3, color: MM.textMuted }}
                           >
-                            {p.low_stock_alert || "—"}
+                            {p.low_stock_alert ? formatQty(p.low_stock_alert) : "—"}
                           </span>
                         )}
                       </td>
+
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-1.5 flex-wrap">
                           {isEditing ? (
@@ -825,7 +896,7 @@ export default function Products() {
                               <button
                                 onClick={() => saveEdit(p.id)}
                                 className="px-3 py-1.5 rounded-lg text-xs font-bold transition"
-                                style={{ background: MM.black, color: MM.white }}
+                                style={{ background: MM.text, color: MM.bg }}
                               >
                                 Save
                               </button>
@@ -842,7 +913,7 @@ export default function Products() {
                               <button
                                 onClick={() => setStockModal({ product: p })}
                                 className="inline-flex items-center justify-center px-2.5 py-1.5 rounded-lg transition text-xs font-bold whitespace-nowrap"
-                                style={{ background: MM.smoke, color: MM.black, border: `1px solid ${MM.lightSilver}` }}
+                                style={{ background: MM.surface3, color: MM.text, border: `1px solid ${MM.borderSoft}` }}
                                 title="Add stock"
                               >
                                 + Stock
@@ -850,7 +921,7 @@ export default function Products() {
                               <button
                                 onClick={() => startEdit(p)}
                                 className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition"
-                                style={{ background: MM.smoke, color: MM.black, border: `1px solid ${MM.lightSilver}` }}
+                                style={{ background: MM.surface2, color: MM.text, border: `1px solid ${MM.borderSoft}` }}
                                 title="Edit"
                               >
                                 ✎
@@ -858,7 +929,7 @@ export default function Products() {
                               <button
                                 onClick={() => setDeleteConfirm(p)}
                                 className="inline-flex items-center justify-center w-7 h-7 rounded-lg transition"
-                                style={{ background: MM.smoke, color: MM.gunmetal, border: `1px solid ${MM.lightSilver}` }}
+                                style={{ background: MM.surface2, color: MM.textMuted, border: `1px solid ${MM.borderSoft}` }}
                                 title="Delete"
                               >
                                 🗑
@@ -877,30 +948,32 @@ export default function Products() {
       )}
 
       {stockModal && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: MM.overlay }}>
           <div className="w-full max-w-sm p-6" style={cardStyle}>
-            <h3 className="font-black text-base mb-1" style={{ color: MM.black }}>
+            <h3 className="font-black text-base mb-1" style={{ color: MM.text }}>
               Add Stock
             </h3>
-            <p className="text-xs mb-4 truncate" style={{ color: MM.gunmetal }}>
+            <p className="text-xs mb-4 truncate" style={{ color: MM.textMuted }}>
               {stockModal.product.productname} <span className="font-semibold">Office</span>
             </p>
             <div className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: MM.gunmetal }}>
-                  Quantity <span style={{ color: MM.black }}>*</span>
+                <label className="block text-xs font-semibold mb-1" style={{ color: MM.textMuted }}>
+                  Quantity (kg) <span style={{ color: MM.text }}>*</span>
                 </label>
                 <input
                   type="number"
+                  step="0.01"
+                  min="0"
                   value={stockForm.quantity}
                   onChange={(e) => setStockForm((f) => ({ ...f, quantity: e.target.value }))}
-                  placeholder="0"
+                  placeholder="0.00"
                   style={inputStyle}
                   autoFocus
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: MM.gunmetal }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: MM.textMuted }}>
                   Party / Supplier
                 </label>
                 <input
@@ -911,7 +984,7 @@ export default function Products() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-semibold mb-1" style={{ color: MM.gunmetal }}>
+                <label className="block text-xs font-semibold mb-1" style={{ color: MM.textMuted }}>
                   Notes
                 </label>
                 <input
@@ -926,7 +999,7 @@ export default function Products() {
               <button
                 onClick={submitStock}
                 className="flex-1 py-2 rounded-lg text-sm font-bold transition"
-                style={{ background: MM.black, color: MM.white }}
+                style={{ background: MM.text, color: MM.bg }}
               >
                 Add Stock
               </button>
@@ -946,13 +1019,13 @@ export default function Products() {
       )}
 
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: MM.overlay }}>
           <div className="w-full max-w-sm p-6 text-center" style={cardStyle}>
-            <h3 className="font-black text-base mb-2" style={{ color: MM.black }}>
+            <h3 className="font-black text-base mb-2" style={{ color: MM.text }}>
               Delete Product?
             </h3>
-            <p className="text-sm mb-5" style={{ color: MM.gunmetal }}>
-              This will permanently delete <span style={{ color: MM.black, fontWeight: 600 }}>{deleteConfirm.productname}</span>.
+            <p className="text-sm mb-5" style={{ color: MM.textMuted }}>
+              This will permanently delete <span style={{ color: MM.text, fontWeight: 600 }}>{deleteConfirm.productname}</span>.
             </p>
             <div className="flex gap-3">
               <button
@@ -965,7 +1038,7 @@ export default function Products() {
               <button
                 onClick={() => handleDelete(deleteConfirm.id)}
                 className="flex-1 py-2 rounded-lg text-sm font-bold transition"
-                style={{ background: MM.black, color: MM.white }}
+                style={{ background: MM.text, color: MM.bg }}
               >
                 Delete
               </button>
@@ -975,37 +1048,40 @@ export default function Products() {
       )}
 
       {selectedProduct && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: MM.overlay }}>
           <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto" style={cardStyle}>
-            <div className="sticky top-0 px-6 py-4 flex items-center justify-between" style={{ background: MM.white, borderBottom: `1px solid ${MM.lightSilver}` }}>
+            <div
+              className="sticky top-0 px-6 py-4 flex items-center justify-between"
+              style={{ background: MM.surface, borderBottom: `1px solid ${MM.border}` }}
+            >
               <div>
-                <h2 className="font-black text-base" style={{ color: MM.black }}>Ledger</h2>
-                <p className="text-xs font-mono" style={{ color: MM.gunmetal }}>
+                <h2 className="font-black text-base" style={{ color: MM.text }}>Ledger</h2>
+                <p className="text-xs font-mono" style={{ color: MM.textMuted }}>
                   {selectedProduct.productname} · {selectedProduct.productid || "No ID"}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedProduct(null)}
                 className="w-8 h-8 rounded-full flex items-center justify-center transition"
-                style={{ background: MM.smoke, color: MM.black }}
+                style={{ background: MM.surface3, color: MM.text }}
               >
                 ✕
               </button>
             </div>
             <div className="p-6">
               {ledgerLoading ? (
-                <div className="flex items-center justify-center py-12 text-sm" style={{ color: MM.gunmetal }}>
+                <div className="flex items-center justify-center py-12 text-sm" style={{ color: MM.textMuted }}>
                   Loading transactions...
                 </div>
               ) : ledger.length === 0 ? (
-                <div className="text-center py-12 text-sm" style={{ color: MM.gunmetal }}>
+                <div className="text-center py-12 text-sm" style={{ color: MM.textMuted }}>
                   No transactions yet
                 </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead style={{ background: MM.smoke, borderBottom: `1px solid ${MM.lightSilver}` }}>
-                      <tr style={{ color: MM.gunmetal }}>
+                    <thead style={{ background: MM.surface2, borderBottom: `1px solid ${MM.border}` }}>
+                      <tr style={{ color: MM.textMuted }}>
                         <th className="px-4 py-3 text-left">Date</th>
                         <th className="px-4 py-3 text-left">Type</th>
                         <th className="px-4 py-3 text-center">Qty</th>
@@ -1016,20 +1092,28 @@ export default function Products() {
                     </thead>
                     <tbody>
                       {ledger.map((t, i) => (
-                        <tr key={t.id} style={{ background: i % 2 === 0 ? MM.white : MM.smoke, borderTop: `1px solid ${MM.lightSilver}` }}>
-                          <td className="px-4 py-2 text-xs" style={{ color: MM.gunmetal }}>{formatDateTime(t.createdat)}</td>
+                        <tr key={t.id} style={{ background: i % 2 === 0 ? MM.surface : MM.surface2, borderTop: `1px solid ${MM.border}` }}>
+                          <td className="px-4 py-2 text-xs" style={{ color: MM.textMuted }}>{formatDateTime(t.createdat)}</td>
                           <td className="px-4 py-2">
                             <span
                               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold"
-                              style={{ background: MM.smoke, color: MM.black, border: `1px solid ${MM.lightSilver}` }}
+                              style={{
+                                background: t.transactiontype === "inward" ? MM.successBg : MM.dangerBg,
+                                color: t.transactiontype === "inward" ? MM.successText : MM.dangerText,
+                                border: `1px solid ${MM.borderSoft}`,
+                              }}
                             >
                               {t.transactiontype === "inward" ? "IN" : "OUT"}
                             </span>
                           </td>
-                          <td className="px-4 py-2 text-center font-semibold tabular-nums" style={{ color: MM.charcoal }}>{t.quantity}</td>
-                          <td className="px-4 py-2 text-center font-black tabular-nums" style={{ color: MM.black }}>{t.balance}</td>
-                          <td className="px-4 py-2 text-xs" style={{ color: MM.gunmetal }}>{t.party || "—"}</td>
-                          <td className="px-4 py-2 text-xs" style={{ color: MM.gunmetal }}>{t.notes || "—"}</td>
+                          <td className="px-4 py-2 text-center font-semibold tabular-nums" style={{ color: MM.text }}>
+                            {formatQty(t.quantity)}
+                          </td>
+                          <td className="px-4 py-2 text-center font-black tabular-nums" style={{ color: MM.text }}>
+                            {formatQty(t.balance)}
+                          </td>
+                          <td className="px-4 py-2 text-xs" style={{ color: MM.textMuted }}>{t.party || "—"}</td>
+                          <td className="px-4 py-2 text-xs" style={{ color: MM.textMuted }}>{t.notes || "—"}</td>
                         </tr>
                       ))}
                     </tbody>
