@@ -1,7 +1,17 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Link,
+  useLocation,
+  Navigate,
+} from "react-router-dom";
 import { supabase } from "./supabase.js";
-import { clearStoredUserData, isDeviceApprovedForUser } from "./utils/deviceSecurity.js";
+import {
+  clearStoredUserData,
+  isDeviceApprovedForUser,
+} from "./utils/deviceSecurity.js";
 
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
@@ -21,13 +31,17 @@ const ALL_NAV_ITEMS = [
 
 function NavBar({ session, deviceApproved, onSignOut }) {
   const location = useLocation();
-  if (!session || !deviceApproved || window.location.href.includes("update-password")) return null;
+
+  if (!session || !deviceApproved || location.pathname === "/update-password") {
+    return null;
+  }
 
   return (
     <nav className="bg-gray-900 text-white px-4 py-3 flex justify-between items-center no-print sticky top-0 z-40 shadow-lg">
       <div className="flex gap-1 overflow-x-auto scrollbar-hide">
         {ALL_NAV_ITEMS.map(({ to, label, icon }) => {
           const active = location.pathname === to;
+
           return (
             <Link
               key={to}
@@ -44,9 +58,10 @@ function NavBar({ session, deviceApproved, onSignOut }) {
           );
         })}
       </div>
+
       <div className="flex items-center gap-3 ml-3 shrink-0">
         <span className="text-xs text-gray-400 hidden lg:block truncate max-w-[160px]">
-          {session.user.email}
+          {session?.user?.email || ""}
         </span>
         <button
           onClick={onSignOut}
@@ -63,24 +78,76 @@ function ProtectedRoute({ session, deviceApproved, children }) {
   if (!session || !deviceApproved) {
     return <Navigate to="/login" replace />;
   }
+
   return children;
 }
 
 function AppContent({ session, deviceApproved, onSignOut }) {
   return (
     <>
-      <NavBar session={session} deviceApproved={deviceApproved} onSignOut={onSignOut} />
+      <NavBar
+        session={session}
+        deviceApproved={deviceApproved}
+        onSignOut={onSignOut}
+      />
+
       <Routes>
-        <Route path="/login" element={session && deviceApproved ? <Navigate to="/" replace /> : <Login />} />
+        <Route
+          path="/login"
+          element={session && deviceApproved ? <Navigate to="/" replace /> : <Login />}
+        />
         <Route path="/update-password" element={<UpdatePassword />} />
+
         {session && deviceApproved ? (
           <>
-            <Route path="/" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Dashboard /></ProtectedRoute>} />
-            <Route path="/products" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Products /></ProtectedRoute>} />
-            <Route path="/transactions" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Transactions /></ProtectedRoute>} />
-            <Route path="/scan" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Scan /></ProtectedRoute>} />
-            <Route path="/qr-print" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><QRPrint /></ProtectedRoute>} />
-            <Route path="/lookup" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><LookupPrint /></ProtectedRoute>} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products"
+              element={
+                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
+                  <Products />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/transactions"
+              element={
+                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
+                  <Transactions />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/scan"
+              element={
+                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
+                  <Scan />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/qr-print"
+              element={
+                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
+                  <QRPrint />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/lookup"
+              element={
+                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
+                  <LookupPrint />
+                </ProtectedRoute>
+              }
+            />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (
@@ -148,7 +215,11 @@ export default function App() {
         return;
       }
 
-      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+      if (
+        event === "SIGNED_IN" ||
+        event === "TOKEN_REFRESHED" ||
+        event === "INITIAL_SESSION"
+      ) {
         await syncSession(nextSession);
       }
     });
@@ -165,7 +236,7 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-gray-500 font-bold">
+      <div className="min-h-screen flex items-center justify-center text-gray-500 font-bold bg-neutral-950">
         Loading...
       </div>
     );
@@ -173,7 +244,11 @@ export default function App() {
 
   return (
     <Router>
-      <AppContent session={session} deviceApproved={deviceApproved} onSignOut={handleSignOut} />
+      <AppContent
+        session={session}
+        deviceApproved={deviceApproved}
+        onSignOut={handleSignOut}
+      />
     </Router>
   );
 }

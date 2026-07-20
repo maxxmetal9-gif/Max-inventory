@@ -11,19 +11,25 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (error) {
-      alert(error.message);
-      setLoading(false);
-      return;
-    }
-
     try {
-      const user = data.user;
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        alert(error.message);
+        return;
+      }
+
+      const user = data?.user;
+      if (!user) {
+        await supabase.auth.signOut({ scope: "local" });
+        clearStoredUserData();
+        alert("Login failed. No user session was created.");
+        return;
+      }
+
       const currentID = await getDeviceFingerprint();
 
       const { data: profile, error: profileError } = await supabase
@@ -37,33 +43,34 @@ export default function Login() {
       const rawIDs = Array.isArray(profile?.allowed_device_id)
         ? profile.allowed_device_id
         : [];
-      const allowedIDs = rawIDs.filter((id) => id && id !== "null");
 
+      const allowedIDs = rawIDs.filter((id) => id && id !== "null");
       const userEmail = profile?.email || user?.email || "";
       const deviceLimit = 1;
 
       if (allowedIDs.includes(currentID)) {
-        console.log("Device verified. Access granted.");
       } else if (allowedIDs.length < deviceLimit) {
         const newIDList = [...allowedIDs, currentID];
+
         const { error: updateError } = await supabase
           .from("profiles")
           .update({ allowed_device_id: newIDList })
           .eq("id", user.id);
 
         if (updateError) throw updateError;
+
         alert(`New device registered! Slot ${newIDList.length}/${deviceLimit} occupied.`);
       } else {
         await supabase.auth.signOut({ scope: "local" });
         clearStoredUserData();
         alert(`ACCESS DENIED: All ${deviceLimit} device slots are full for this account.`);
-        setLoading(false);
         return;
       }
 
       localStorage.setItem("userEmail", userEmail);
       localStorage.setItem("employee", userEmail);
       localStorage.setItem("user", JSON.stringify(user));
+
       window.location.href = "/";
       return;
     } catch (err) {
