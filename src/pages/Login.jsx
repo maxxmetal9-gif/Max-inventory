@@ -34,21 +34,13 @@ export default function Login() {
 
       if (profileError) throw profileError;
 
-      const rawIDs = Array.isArray(profile?.allowed_device_id) ? profile.allowed_device_id : [];
+      const rawIDs = Array.isArray(profile?.allowed_device_id)
+        ? profile.allowed_device_id
+        : [];
       const allowedIDs = rawIDs.filter((id) => id && id !== "null");
-      const userEmail = profile.email;
 
-      let deviceLimit = 1;
-      if (userEmail === "maxxmetal9@gmail.com") {
-        deviceLimit = 4;
-      } else if (userEmail === "pursingh1@gmail.com") {
-        deviceLimit = 2;
-      } else if (
-        userEmail === "vishalom999@gmail.com" ||
-        userEmail === "vikrambhandari7171@gmail.com"
-      ) {
-        deviceLimit = 1;
-      }
+      const userEmail = profile?.email || user?.email || "";
+      const deviceLimit = 1;
 
       if (allowedIDs.includes(currentID)) {
         console.log("Device verified. Access granted.");
@@ -73,11 +65,9 @@ export default function Login() {
       localStorage.setItem("employee", userEmail);
       localStorage.setItem("user", JSON.stringify(user));
       window.location.href = "/";
+      return;
     } catch (err) {
       console.error("Security verification failed:", err);
-      // signInWithPassword already created a local session. A failed device
-      // check must revoke it before the error is shown, otherwise App.jsx can
-      // render protected pages from that session.
       await supabase.auth.signOut({ scope: "local" });
       clearStoredUserData();
       alert("Device security check failed. Please try again or contact Admin.");
