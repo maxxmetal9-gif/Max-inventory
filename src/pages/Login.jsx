@@ -1,86 +1,99 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
-import { clearStoredUserData, getDeviceFingerprint } from "../utils/deviceSecurity";
+import { isDeviceApprovedForUser } from "../utils/deviceSecurity";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState({ type: "", content: "" });
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setMessage({ type: "", content: "" });
+    console.log("Login process started...");
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      // 1. Sign in the user
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
-      if (error) {
-        alert(error.message);
-        return;
+      if (signInError) {
+        console.error("Sign-in error:", signInError);
+        throw new Error(signInError.message);
       }
 
       const user = data?.user;
+      console.log("Supabase sign-in successful for user:", user);
+
       if (!user) {
-        await supabase.auth.signOut({ scope: "local" });
-        clearStoredUserData();
-        alert("Login failed. No user session was created.");
+        throw new Error("Login failed: No user session was created.");
+      }
+
+      // 2. Check for device approval
+      console.log("Performing device approval check...");
+      const approvalResult = await isDeviceApprovedForUser(user.id);
+
+      if (approvalResult.approved) {
+        console.log("Device is approved. Login successful.");
+        // App.jsx's onAuthStateChange will handle navigation
         return;
       }
 
-      const currentID = await getDeviceFingerprint();
+      // 3. Handle cases where device is not approved
+      console.log(`Device not approved. Reason: ${approvalResult.reason}`);
+      const { reason, currentDeviceId, allowedDeviceIds } = approvalResult;
+      const deviceLimit = 1; // Or read from config
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("allowed_device_id, email")
-        .eq("id", user.id)
-        .single();
+      if (reason === 'DEVICE_DENIED') {
+        if (allowedDeviceIds.length < deviceLimit) {
+          // Add new device if there is space
+          console.log(`Registering new device. Slots used: ${allowedDeviceIds.length}/${deviceLimit}`);
+          const newIdList = [...allowedDeviceIds, currentDeviceId];
 
-      if (profileError) throw profileError;
+          const { error: updateError } = await supabase
+            .from("profiles")
+            .update({ allowed_device_id: newIdList })
+            .eq("id", user.id);
+          
+          if (updateError) {
+            console.error("Failed to update profile with new device ID:", updateError);
+            throw new Error("Failed to register this new device. Please contact support.");
+          }
+          
+          console.log("New device registered successfully!");
+          setMessage({
+            type: "success",
+            content: `New device registered! Slot ${newIdList.length}/${deviceLimit} occupied.`,
+          });
+          // Successful registration, App.jsx will now take over
+          return;
 
-      const rawIDs = Array.isArray(profile?.allowed_device_id)
-        ? profile.allowed_device_id
-        : [];
-
-      const allowedIDs = rawIDs.filter((id) => id && id !== "null");
-      const userEmail = profile?.email || user?.email || "";
-      const deviceLimit = 1;
-
-      if (allowedIDs.includes(currentID)) {
-      } else if (allowedIDs.length < deviceLimit) {
-        const newIDList = [...allowedIDs, currentID];
-
-        const { error: updateError } = await supabase
-          .from("profiles")
-          .update({ allowed_device_id: newIDList })
-          .eq("id", user.id);
-
-        if (updateError) throw updateError;
-
-        alert(`New device registered! Slot ${newIDList.length}/${deviceLimit} occupied.`);
+        } else {
+          // No space for new devices
+          console.warn(`Device limit reached. Access denied. Used: ${allowedDeviceIds.length}/${deviceLimit}`);
+          throw new Error(`ACCESS DENIED: All ${deviceLimit} device slots are full for this account.`);
+        }
       } else {
-        await supabase.auth.signOut({ scope: "local" });
-        clearStoredUserData();
-        alert(`ACCESS DENIED: All ${deviceLimit} device slots are full for this account.`);
-        return;
+        // Handle other denial reasons
+        let userMessage = "Device security check failed.";
+        if (reason === 'PROFILE_NOT_FOUND') userMessage = "Your user profile was not found. Please contact an administrator.";
+        if (reason === 'DB_ERROR') userMessage = "A database error occurred while checking your profile.";
+        if (reason === 'INVALID_DEVICE_ID_FORMAT') userMessage = "Your profile data is corrupt. Please contact an administrator.";
+        throw new Error(userMessage);
       }
 
-      localStorage.setItem("userEmail", userEmail);
-      localStorage.setItem("employee", userEmail);
-      localStorage.setItem("user", JSON.stringify(user));
-
-      window.location.href = "/";
-      return;
     } catch (err) {
-      console.error("Security verification failed:", err);
-      await supabase.auth.signOut({ scope: "local" });
-      clearStoredUserData();
-      alert("Device security check failed. Please try again or contact Admin.");
-      return;
+      console.error("Login flow failed:", err);
+      // If anything fails, sign the user out to be safe
+      await supabase.auth.signOut();
+      setMessage({ type: "error", content: err.message });
     } finally {
       setLoading(false);
+      console.log("Login process finished.");
     }
   };
 
@@ -122,13 +135,21 @@ export default function Login() {
               className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 placeholder-neutral-500 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
             />
           </div>
+          
+          {message.content && (
+            <div className={`text-center text-sm ${
+              message.type === 'error' ? 'text-red-400' : 'text-green-400'
+            }`}>
+              {message.content}
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-semibold transition mt-2"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? "Verifying..." : "Sign In"}
           </button>
         </form>
 

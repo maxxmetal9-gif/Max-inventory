@@ -8,10 +8,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import { supabase } from "./supabase.js";
-import {
-  clearStoredUserData,
-  isDeviceApprovedForUser,
-} from "./utils/deviceSecurity.js";
+import { clearStoredUserData, isDeviceApprovedForUser } from "./utils/deviceSecurity.js";
 
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
@@ -29,10 +26,10 @@ const ALL_NAV_ITEMS = [
   { to: "/lookup", label: "Lookup & Print", icon: "🔍" },
 ];
 
-function NavBar({ session, deviceApproved, onSignOut }) {
+function NavBar({ session, onSignOut }) {
   const location = useLocation();
 
-  if (!session || !deviceApproved || location.pathname === "/update-password") {
+  if (!session || location.pathname === "/update-password") {
     return null;
   }
 
@@ -41,7 +38,6 @@ function NavBar({ session, deviceApproved, onSignOut }) {
       <div className="flex gap-1 overflow-x-auto scrollbar-hide">
         {ALL_NAV_ITEMS.map(({ to, label, icon }) => {
           const active = location.pathname === to;
-
           return (
             <Link
               key={to}
@@ -58,7 +54,6 @@ function NavBar({ session, deviceApproved, onSignOut }) {
           );
         })}
       </div>
-
       <div className="flex items-center gap-3 ml-3 shrink-0">
         <span className="text-xs text-gray-400 hidden lg:block truncate max-w-[160px]">
           {session?.user?.email || ""}
@@ -74,85 +69,45 @@ function NavBar({ session, deviceApproved, onSignOut }) {
   );
 }
 
-function ProtectedRoute({ session, deviceApproved, children }) {
-  if (!session || !deviceApproved) {
+function ProtectedRoute({ session, children }) {
+  if (!session) {
     return <Navigate to="/login" replace />;
   }
-
   return children;
 }
 
-function AppContent({ session, deviceApproved, onSignOut }) {
+function AppContent({ session, onSignOut }) {
   return (
     <>
-      <NavBar
-        session={session}
-        deviceApproved={deviceApproved}
-        onSignOut={onSignOut}
-      />
-
+      <NavBar session={session} onSignOut={onSignOut} />
       <Routes>
-        <Route
-          path="/login"
-          element={session && deviceApproved ? <Navigate to="/" replace /> : <Login />}
-        />
+        <Route path="/login" element={session ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/update-password" element={<UpdatePassword />} />
-
-        {session && deviceApproved ? (
-          <>
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/products"
-              element={
-                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
-                  <Products />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/transactions"
-              element={
-                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
-                  <Transactions />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scan"
-              element={
-                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
-                  <Scan />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/qr-print"
-              element={
-                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
-                  <QRPrint />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/lookup"
-              element={
-                <ProtectedRoute session={session} deviceApproved={deviceApproved}>
-                  <LookupPrint />
-                </ProtectedRoute>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </>
-        ) : (
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        )}
+        <Route
+          path="/"
+          element={<ProtectedRoute session={session}><Dashboard /></ProtectedRoute>}
+        />
+        <Route
+          path="/products"
+          element={<ProtectedRoute session={session}><Products /></ProtectedRoute>}
+        />
+        <Route
+          path="/transactions"
+          element={<ProtectedRoute session={session}><Transactions /></ProtectedRoute>}
+        />
+        <Route
+          path="/scan"
+          element={<ProtectedRoute session={session}><Scan /></ProtectedRoute>}
+        />
+        <Route
+          path="/qr-print"
+          element={<ProtectedRoute session={session}><QRPrint /></ProtectedRoute>}
+        />
+        <Route
+          path="/lookup"
+          element={<ProtectedRoute session={session}><LookupPrint /></ProtectedRoute>}
+        />
+        <Route path="*" element={<Navigate to={session ? "/" : "/login"} replace />} />
       </Routes>
     </>
   );
@@ -160,95 +115,67 @@ function AppContent({ session, deviceApproved, onSignOut }) {
 
 export default function App() {
   const [session, setSession] = useState(null);
-  const [deviceApproved, setDeviceApproved] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const syncSession = async (nextSession) => {
-      if (!nextSession) {
-        clearStoredUserData();
-        setSession(null);
-        setDeviceApproved(false);
-        return;
-      }
+    // This handles the initial session load and any subsequent auth changes.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, currentSession) => {
+        console.log(`Auth event: ${event}`, currentSession);
+        
+        if (event === "INITIAL_SESSION") {
+          setLoading(true);
+        }
 
-      try {
-        const approved = await isDeviceApprovedForUser(nextSession.user.id);
-
-        if (!approved) {
-          await supabase.auth.signOut({ scope: "local" });
+        if (!currentSession) {
           clearStoredUserData();
           setSession(null);
-          setDeviceApproved(false);
+          setLoading(false);
           return;
         }
 
-        setSession(nextSession);
-        setDeviceApproved(true);
-      } catch (error) {
-        console.error("Unable to verify device approval:", error);
-        await supabase.auth.signOut({ scope: "local" });
-        clearStoredUserData();
-        setSession(null);
-        setDeviceApproved(false);
+        // For existing sessions, re-validate device on token refresh or initial load
+        // This is a security measure in case device permissions change while logged in.
+        if (event === "TOKEN_REFRESHED" || event === "INITIAL_SESSION") {
+          console.log("Re-validating device for existing session...");
+          const approval = await isDeviceApprovedForUser(currentSession.user.id);
+          if (!approval.approved) {
+            console.warn(`Device re-validation failed. Reason: ${approval.reason}. Signing out.`);
+            await supabase.auth.signOut();
+            setSession(null);
+            setLoading(false);
+            return;
+          }
+           console.log("Device re-validated successfully.");
+        }
+
+        setSession(currentSession);
+        setLoading(false);
       }
+    );
+
+    return () => {
+      subscription.unsubscribe();
     };
-
-    const restoreSession = async () => {
-      const {
-        data: { session: savedSession },
-      } = await supabase.auth.getSession();
-
-      await syncSession(savedSession);
-      setLoading(false);
-    };
-
-    restoreSession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (event, nextSession) => {
-      if (event === "SIGNED_OUT" || !nextSession) {
-        clearStoredUserData();
-        setSession(null);
-        setDeviceApproved(false);
-        return;
-      }
-
-      if (
-        event === "SIGNED_IN" ||
-        event === "TOKEN_REFRESHED" ||
-        event === "INITIAL_SESSION"
-      ) {
-        await syncSession(nextSession);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut({ scope: "local" });
-    clearStoredUserData();
-    setSession(null);
-    setDeviceApproved(false);
+    console.log("Signing out user...");
+    await supabase.auth.signOut();
+    // The onAuthStateChange listener will handle clearing the session state
   };
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-500 font-bold bg-neutral-950">
-        Loading...
+        Loading Session...
       </div>
     );
   }
 
   return (
     <Router>
-      <AppContent
-        session={session}
-        deviceApproved={deviceApproved}
-        onSignOut={handleSignOut}
-      />
+      <AppContent session={session} onSignOut={handleSignOut} />
     </Router>
   );
 }
