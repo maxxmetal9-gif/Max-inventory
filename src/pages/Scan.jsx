@@ -85,7 +85,7 @@ export default function Scan() {
              <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           </div>
           <h1 className="text-2xl font-black text-gray-800 mb-2">Product Lookup</h1>
-          <p className="text-gray-500 text-sm mb-8 font-medium">Enter Product ID for Nivee Metal</p>
+          <p className="text-gray-500 text-sm mb-8 font-medium">Enter Product ID for Maxx Metals</p>
           
           <input 
             className="w-full p-5 border-2 border-gray-100 rounded-2xl text-center text-lg font-mono mb-4 focus:border-blue-500 outline-none uppercase transition-all shadow-sm"

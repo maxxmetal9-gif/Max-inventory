@@ -17,7 +17,7 @@ export default function UpdatePassword() {
     if (error) {
       alert("Error: " + error.message);
     } else {
-      alert("Password set successfully! Welcome to Nivee Metal.");
+      alert("Password set successfully! Welcome to Maxx Metals.");
       navigate("/"); // Redirect to Dashboard
     }
     setLoading(false);

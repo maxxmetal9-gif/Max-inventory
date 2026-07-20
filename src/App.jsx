@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
 import { supabase } from "./supabase.js";
+import { clearStoredUserData, isDeviceApprovedForUser } from "./utils/deviceSecurity.js";
 
 import Dashboard from "./pages/Dashboard.jsx";
 import Products from "./pages/Products.jsx";
@@ -18,12 +19,12 @@ const ALL_NAV_ITEMS = [
   { to: "/lookup", label: "Lookup & Print", icon: "🔍" },
 ];
 
-function NavBar({ session, onSignOut }) {
+function NavBar({ session, deviceApproved, onSignOut }) {
   const location = useLocation();
-  if (!session || window.location.href.includes("update-password")) return null;
+  if (!session || !deviceApproved || window.location.href.includes("update-password")) return null;
 
   return (
-    <nav className="bg-white dark:bg-neutral-900 text-neutral-800 dark:text-white px-4 py-3 flex justify-between items-center no-print sticky top-0 z-40 border-b border-gray-200 dark:border-neutral-800">
+    <nav className="bg-gray-900 text-white px-4 py-3 flex justify-between items-center no-print sticky top-0 z-40 shadow-lg">
       <div className="flex gap-1 overflow-x-auto scrollbar-hide">
         {ALL_NAV_ITEMS.map(({ to, label, icon }) => {
           const active = location.pathname === to;
@@ -34,7 +35,7 @@ function NavBar({ session, onSignOut }) {
               className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold whitespace-nowrap transition-all ${
                 active
                   ? "bg-blue-600 text-white"
-                  : "text-neutral-600 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white"
+                  : "text-gray-300 hover:bg-gray-700 hover:text-white"
               }`}
             >
               <span>{icon}</span>
@@ -44,10 +45,10 @@ function NavBar({ session, onSignOut }) {
         })}
       </div>
       <div className="flex items-center gap-3 ml-3 shrink-0">
-        <span className="text-xs text-gray-500 dark:text-gray-400 hidden lg:block truncate max-w-[160px]">{session.user.email}</span>
+        <span className="text-xs text-gray-400 hidden lg:block truncate max-w-[160px]">{session.user.email}</span>
         <button
           onClick={onSignOut}
-          className="bg-red-600 px-3 py-1.5 rounded-lg text-xs text-white font-semibold hover:bg-red-700 transition-colors"
+          className="bg-red-600 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
         >
           Sign Out
         </button>
@@ -56,21 +57,29 @@ function NavBar({ session, onSignOut }) {
   );
 }
 
-function AppContent({ session, onSignOut }) {
+function ProtectedRoute({ session, deviceApproved, children }) {
+  if (!session || !deviceApproved) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+function AppContent({ session, deviceApproved, onSignOut }) {
   return (
     <>
-      <NavBar session={session} onSignOut={onSignOut} />
+      <NavBar session={session} deviceApproved={deviceApproved} onSignOut={onSignOut} />
       <Routes>
-        <Route path="/login" element={<Login />} />
+        <Route path="/login" element={session && deviceApproved ? <Navigate to="/" replace /> : <Login />} />
         <Route path="/update-password" element={<UpdatePassword />} />
-        {session ? (
+        {session && deviceApproved ? (
           <>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/scan" element={<Scan />} />
-            <Route path="/qr-print" element={<QRPrint />} />
-            <Route path="/lookup" element={<LookupPrint />} />
+            <Route path="/" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Dashboard /></ProtectedRoute>} />
+            <Route path="/products" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Products /></ProtectedRoute>} />
+            <Route path="/transactions" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Transactions /></ProtectedRoute>} />
+            <Route path="/scan" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><Scan /></ProtectedRoute>} />
+            <Route path="/qr-print" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><QRPrint /></ProtectedRoute>} />
+            <Route path="/lookup" element={<ProtectedRoute session={session} deviceApproved={deviceApproved}><LookupPrint /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         ) : (
@@ -83,28 +92,65 @@ function AppContent({ session, onSignOut }) {
 
 export default function App() {
   const [session, setSession] = useState(null);
+  const [deviceApproved, setDeviceApproved] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
+    const restoreSession = async () => {
+      const { data: { session: savedSession } } = await supabase.auth.getSession();
+
+      if (!savedSession) {
+        clearStoredUserData();
+        setSession(null);
+        setDeviceApproved(false);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const approved = await isDeviceApprovedForUser(savedSession.user.id);
+        if (!approved) {
+          await supabase.auth.signOut({ scope: "local" });
+          clearStoredUserData();
+          setSession(null);
+          setDeviceApproved(false);
+          return;
+        }
+
+        setSession(savedSession);
+        setDeviceApproved(true);
+      } catch (error) {
+        console.error("Unable to verify device approval:", error);
+        await supabase.auth.signOut({ scope: "local" });
+        clearStoredUserData();
+        setSession(null);
+        setDeviceApproved(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    restoreSession();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "SIGNED_OUT" || !nextSession) {
+        clearStoredUserData();
+        setSession(null);
+        setDeviceApproved(false);
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
+    clearStoredUserData();
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500 dark:text-gray-400 font-bold">Loading...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-500 font-bold">Loading...</div>;
 
   return (
     <Router>
-      <AppContent session={session} onSignOut={handleSignOut} />
+      <AppContent session={session} deviceApproved={deviceApproved} onSignOut={handleSignOut} />
     </Router>
   );
 }

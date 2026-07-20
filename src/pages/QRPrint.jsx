@@ -51,7 +51,7 @@ export default function QRPrint() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 print:grid-cols-3 print:gap-4">
         {products.map((p) => {
           // ✅ FIX: Put the full https:// link back in so phone cameras recognize it as a website!
-          const qrUrl = `https://niveeinventory.app/scan/${encodeURIComponent(p.product_id)}`;
+          const qrUrl = `${window.location.origin}/scan/${encodeURIComponent(p.product_id)}`;
 
           return (
             <div 
@@ -59,7 +59,7 @@ export default function QRPrint() {
               className="bg-white border-2 border-gray-100 p-4 rounded-2xl flex flex-col items-center text-center shadow-sm print:shadow-none print:border-gray-300 page-break-inside-avoid"
             >
               <p className="text-[10px] font-black text-blue-600 uppercase tracking-tighter mb-1 truncate w-full">
-                Nivee Metal
+                Maxx Metals
               </p>
               
               <div className="p-2 bg-white rounded-lg border border-gray-50">

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
-import { getDeviceFingerprint } from "../utils/deviceSecurity";
+import { clearStoredUserData, getDeviceFingerprint } from "../utils/deviceSecurity";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -62,7 +62,8 @@ export default function Login() {
         if (updateError) throw updateError;
         alert(`New device registered! Slot ${newIDList.length}/${deviceLimit} occupied.`);
       } else {
-        await supabase.auth.signOut();
+        await supabase.auth.signOut({ scope: "local" });
+        clearStoredUserData();
         alert(`ACCESS DENIED: All ${deviceLimit} device slots are full for this account.`);
         setLoading(false);
         return;
@@ -74,7 +75,13 @@ export default function Login() {
       window.location.href = "/";
     } catch (err) {
       console.error("Security verification failed:", err);
+      // signInWithPassword already created a local session. A failed device
+      // check must revoke it before the error is shown, otherwise App.jsx can
+      // render protected pages from that session.
+      await supabase.auth.signOut({ scope: "local" });
+      clearStoredUserData();
       alert("Device security check failed. Please try again or contact Admin.");
+      return;
     } finally {
       setLoading(false);
     }
