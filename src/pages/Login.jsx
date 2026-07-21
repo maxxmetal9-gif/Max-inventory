@@ -19,16 +19,20 @@ function getOrCreateDeviceToken() {
   return token;
 }
 
+function clearStoredIdentity() {
+  localStorage.removeItem("userEmail");
+  localStorage.removeItem("employee");
+  localStorage.removeItem("user");
+}
+
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: "", content: "" });
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setMessage({ type: "", content: "" });
 
     try {
       const deviceToken = getOrCreateDeviceToken();
@@ -42,19 +46,13 @@ export default function Login() {
       console.log("signInWithPassword result:", { data, error });
 
       if (error) {
-        setMessage({
-          type: "error",
-          content: error.message || "Unable to sign in.",
-        });
+        alert(error.message);
         return;
       }
 
       const user = data?.user;
       if (!user) {
-        setMessage({
-          type: "error",
-          content: "Login failed. No user session was created.",
-        });
+        alert("Login failed. No user session was created.");
         return;
       }
 
@@ -67,156 +65,146 @@ export default function Login() {
       console.log("Registered devices:", devices, fetchError);
 
       if (fetchError) {
+        clearStoredIdentity();
         await supabase.auth.signOut({ scope: "local" });
-        setMessage({
-          type: "error",
-          content: "Could not verify allowed devices.",
-        });
+        alert("Could not verify allowed devices.");
         return;
       }
 
       const registeredDevices = devices || [];
-      const alreadyAllowed = registeredDevices.some(
+      const matchedDevice = registeredDevices.find(
         (d) => d.device_token === deviceToken
       );
 
-      if (alreadyAllowed) {
-        const matched = registeredDevices.find(
-          (d) => d.device_token === deviceToken
-        );
+      if (!matchedDevice && registeredDevices.length >= MAX_DEVICES) {
+        clearStoredIdentity();
+        await supabase.auth.signOut({ scope: "local" });
+        alert("This account is already linked to 3 devices.");
+        return;
+      }
 
-        if (matched?.id) {
-          await supabase
-            .from("user_devices")
-            .update({ last_login_at: new Date().toISOString() })
-            .eq("id", matched.id);
+      if (!matchedDevice) {
+        const { error: insertError } = await supabase.from("user_devices").insert([
+          {
+            user_id: user.id,
+            email: user.email,
+            device_token: deviceToken,
+            device_name: navigator.platform || "Unknown device",
+            last_login_at: new Date().toISOString(),
+          },
+        ]);
+
+        console.log("Device registration result:", insertError);
+
+        if (insertError) {
+          clearStoredIdentity();
+          await supabase.auth.signOut({ scope: "local" });
+          alert(insertError.message || "Could not register this device.");
+          return;
         }
+      } else {
+        const { error: updateError } = await supabase
+          .from("user_devices")
+          .update({ last_login_at: new Date().toISOString() })
+          .eq("id", matchedDevice.id);
 
-        setMessage({
-          type: "success",
-          content: "Login successful. Redirecting...",
-        });
-        return;
+        console.log("Device update result:", updateError);
       }
 
-      if (registeredDevices.length >= MAX_DEVICES) {
-        await supabase.auth.signOut({ scope: "local" });
-        setMessage({
-          type: "error",
-          content:
-            "This account is already linked to 3 devices. Login is not allowed on this device.",
-        });
-        return;
-      }
+      localStorage.setItem("userEmail", user.email || "");
+      localStorage.setItem("employee", user.email || "");
+      localStorage.setItem("user", JSON.stringify(user));
 
-      const { error: insertError } = await supabase.from("user_devices").insert([
-        {
-          user_id: user.id,
-          email: user.email,
-          device_token: deviceToken,
-          device_name: navigator.platform || "Unknown device",
-          last_login_at: new Date().toISOString(),
-        },
-      ]);
-
-      console.log("Device registration result:", insertError);
-
-      if (insertError) {
-        await supabase.auth.signOut({ scope: "local" });
-        setMessage({
-          type: "error",
-          content: "Could not register this device.",
-        });
-        return;
-      }
-
-      setMessage({
-        type: "success",
-        content: `This device has been registered successfully (${registeredDevices.length + 1}/${MAX_DEVICES}).`,
-      });
+      window.location.assign("/");
     } catch (err) {
       console.error("Login error:", err);
-      setMessage({
-        type: "error",
-        content: err?.message || "Something went wrong while signing in.",
-      });
+      clearStoredIdentity();
+      await supabase.auth.signOut({ scope: "local" });
+      alert(err?.message || "Login failed.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-950 px-4">
-      <div className="w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl shadow-xl p-8">
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-neutral-100">Maxx Metals</h1>
-          <p className="text-sm text-neutral-400 mt-2">
-            Secure access for authorized Maxx Metals inventory users only.
+    <div className="min-h-screen flex items-center justify-center bg-white selection:bg-blue-600 selection:text-white">
+      <div
+        className="absolute inset-0 opacity-[0.03] pointer-events-none"
+        style={{
+          backgroundImage: "radial-gradient(#0a2a5e 1px, transparent 1px)",
+          backgroundSize: "30px 30px",
+        }}
+      ></div>
+
+      <form
+        onSubmit={handleLogin}
+        className="relative bg-white p-10 shadow-[0_20px_50px_rgba(0,0,0,0.05)] rounded-[2.5rem] w-full max-w-md space-y-8 border border-slate-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.08)]"
+      >
+        <div className="text-center space-y-2">
+          <h2 className="text-4xl font-black text-[#0a2a5e] tracking-tighter uppercase italic">
+            System Login
+          </h2>
+          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.4em]">
+            Maxx Metals
           </p>
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <label
-              htmlFor="email"
-              className="block text-xs font-semibold text-neutral-400 mb-1.5 uppercase tracking-wide"
-            >
-              Email
+            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
+              Work Email
             </label>
             <input
-              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium"
+              placeholder="employee@maxxmetals.com"
               required
-              autoComplete="email"
-              placeholder="you@example.com"
-              className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 placeholder-neutral-500 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
             />
           </div>
 
           <div>
-            <label
-              htmlFor="password"
-              className="block text-xs font-semibold text-neutral-400 mb-1.5 uppercase tracking-wide"
-            >
+            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
               Password
             </label>
             <input
-              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
+              className="w-full bg-slate-50 border-none p-4 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm font-medium"
               placeholder="••••••••"
-              className="w-full bg-neutral-800 border border-neutral-700 text-neutral-100 placeholder-neutral-500 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition"
+              required
             />
           </div>
+        </div>
 
-          {message.content && (
-            <div
-              className={`text-center text-sm ${
-                message.type === "error" ? "text-red-400" : "text-green-400"
-              }`}
-            >
-              {message.content}
-            </div>
-          )}
-
+        <div className="pt-2">
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-2.5 rounded-lg text-sm font-semibold transition mt-2"
+            className="w-full bg-[#0a2a5e] text-white font-bold py-4 rounded-2xl hover:bg-blue-700 transition-all shadow-lg active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {loading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                <span>Securing Session...</span>
+              </>
+            ) : (
+              "Authorize & Sign In"
+            )}
           </button>
-        </form>
+        </div>
 
-        <p className="text-center text-xs text-neutral-500 mt-6">
-          Protected inventory system · Maximum 3 devices per account
-        </p>
-      </div>
+        <div className="flex flex-col items-center gap-4 pt-2">
+          <div className="h-px w-12 bg-slate-100"></div>
+          <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest text-center leading-relaxed">
+            Device access control active
+            <br />
+            <span className="text-blue-500/50">Maximum 3 saved devices</span>
+          </p>
+        </div>
+      </form>
     </div>
   );
 }
