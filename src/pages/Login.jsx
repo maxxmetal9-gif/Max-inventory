@@ -1,26 +1,22 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
 
-function getDeviceFingerprint() {
-  const nav = window.navigator;
-  const screenInfo = window.screen;
+const DEVICE_STORAGE_KEY = "maxx_device_token";
+const MAX_DEVICES = 3;
 
-  const raw = [
-    nav.userAgent || "",
-    nav.language || "",
-    nav.platform || "",
-    screenInfo?.width || "",
-    screenInfo?.height || "",
-    Intl.DateTimeFormat().resolvedOptions().timeZone || "",
-  ].join("|");
+function getOrCreateDeviceToken() {
+  let token = localStorage.getItem(DEVICE_STORAGE_KEY);
 
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) {
-    hash = (hash << 5) - hash + raw.charCodeAt(i);
-    hash |= 0;
+  if (!token) {
+    token =
+      "dev_" +
+      crypto.randomUUID().replace(/-/g, "") +
+      "_" +
+      Math.random().toString(36).slice(2, 10);
+    localStorage.setItem(DEVICE_STORAGE_KEY, token);
   }
 
-  return `dev_${Math.abs(hash)}`;
+  return token;
 }
 
 export default function Login() {
@@ -35,6 +31,9 @@ export default function Login() {
     setMessage({ type: "", content: "" });
 
     try {
+      const deviceToken = getOrCreateDeviceToken();
+      console.log("Current device token:", deviceToken);
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
@@ -59,61 +58,81 @@ export default function Login() {
         return;
       }
 
-      const deviceId = getDeviceFingerprint();
-      console.log("Current device ID:", deviceId);
-
-      const { data: existingDevices, error: fetchError } = await supabase
+      const { data: devices, error: fetchError } = await supabase
         .from("user_devices")
-        .select("id, device_id")
-        .eq("user_id", user.id);
+        .select("id, device_token")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: true });
 
-      console.log("Existing devices:", existingDevices, fetchError);
+      console.log("Registered devices:", devices, fetchError);
 
       if (fetchError) {
-        setMessage({
-          type: "error",
-          content: "Could not verify registered devices.",
-        });
-        return;
-      }
-
-      const devices = existingDevices || [];
-      const alreadyRegistered = devices.some((d) => d.device_id === deviceId);
-
-      if (!alreadyRegistered && devices.length >= 3) {
         await supabase.auth.signOut({ scope: "local" });
         setMessage({
           type: "error",
-          content: "Login blocked. This account is already active on 3 devices.",
+          content: "Could not verify allowed devices.",
         });
         return;
       }
 
-      if (!alreadyRegistered) {
-        const { error: insertError } = await supabase.from("user_devices").insert([
-          {
-            user_id: user.id,
-            email: user.email,
-            device_id: deviceId,
-            device_name: `${navigator.platform || "Unknown"} / ${navigator.userAgent || "Browser"}`,
-          },
-        ]);
+      const registeredDevices = devices || [];
+      const alreadyAllowed = registeredDevices.some(
+        (d) => d.device_token === deviceToken
+      );
 
-        console.log("Device insert result:", insertError);
+      if (alreadyAllowed) {
+        const matched = registeredDevices.find(
+          (d) => d.device_token === deviceToken
+        );
 
-        if (insertError) {
-          await supabase.auth.signOut({ scope: "local" });
-          setMessage({
-            type: "error",
-            content: "Could not register this device.",
-          });
-          return;
+        if (matched?.id) {
+          await supabase
+            .from("user_devices")
+            .update({ last_login_at: new Date().toISOString() })
+            .eq("id", matched.id);
         }
+
+        setMessage({
+          type: "success",
+          content: "Login successful. Redirecting...",
+        });
+        return;
+      }
+
+      if (registeredDevices.length >= MAX_DEVICES) {
+        await supabase.auth.signOut({ scope: "local" });
+        setMessage({
+          type: "error",
+          content:
+            "This account is already linked to 3 devices. Login is not allowed on this device.",
+        });
+        return;
+      }
+
+      const { error: insertError } = await supabase.from("user_devices").insert([
+        {
+          user_id: user.id,
+          email: user.email,
+          device_token: deviceToken,
+          device_name: navigator.platform || "Unknown device",
+          last_login_at: new Date().toISOString(),
+        },
+      ]);
+
+      console.log("Device registration result:", insertError);
+
+      if (insertError) {
+        await supabase.auth.signOut({ scope: "local" });
+        setMessage({
+          type: "error",
+          content: "Could not register this device.",
+        });
+        return;
       }
 
       setMessage({
         type: "success",
-        content: "Login successful. Redirecting...",
+        content: `This device has been registered successfully (${registeredDevices.length + 1}/${MAX_DEVICES}).`,
       });
     } catch (err) {
       console.error("Login error:", err);
@@ -195,7 +214,7 @@ export default function Login() {
         </form>
 
         <p className="text-center text-xs text-neutral-500 mt-6">
-          Protected inventory system · Max 3 devices per account
+          Protected inventory system · Maximum 3 devices per account
         </p>
       </div>
     </div>
