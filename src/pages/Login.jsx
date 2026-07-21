@@ -35,15 +35,10 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const deviceToken = getOrCreateDeviceToken();
-      console.log("Current device token:", deviceToken);
-
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
+        email,
         password,
       });
-
-      console.log("signInWithPassword result:", { data, error });
 
       if (error) {
         alert(error.message);
@@ -56,71 +51,72 @@ export default function Login() {
         return;
       }
 
+      const deviceToken = getOrCreateDeviceToken();
+
       const { data: devices, error: fetchError } = await supabase
         .from("user_devices")
-        .select("id, device_token")
+        .select("id, user_id, device_token, created_at")
         .eq("user_id", user.id)
         .order("created_at", { ascending: true });
 
-      console.log("Registered devices:", devices, fetchError);
-
       if (fetchError) {
+        console.error("user_devices fetchError:", fetchError);
         clearStoredIdentity();
         await supabase.auth.signOut({ scope: "local" });
-        alert("Could not verify allowed devices.");
+        alert(`Could not verify allowed devices: ${fetchError.message}`);
         return;
       }
 
       const registeredDevices = devices || [];
-      const matchedDevice = registeredDevices.find(
+      const existingDevice = registeredDevices.find(
         (d) => d.device_token === deviceToken
       );
 
-      if (!matchedDevice && registeredDevices.length >= MAX_DEVICES) {
+      if (!existingDevice && registeredDevices.length >= MAX_DEVICES) {
         clearStoredIdentity();
         await supabase.auth.signOut({ scope: "local" });
-        alert("This account is already linked to 3 devices.");
+        alert("This account is already registered on 3 devices.");
         return;
       }
 
-      if (!matchedDevice) {
+      if (!existingDevice) {
         const { error: insertError } = await supabase.from("user_devices").insert([
           {
             user_id: user.id,
-            email: user.email,
+            email: user.email || email,
             device_token: deviceToken,
-            device_name: navigator.platform || "Unknown device",
+            device_name: navigator.userAgent || "Browser device",
             last_login_at: new Date().toISOString(),
           },
         ]);
 
-        console.log("Device registration result:", insertError);
-
         if (insertError) {
+          console.error("user_devices insertError:", insertError);
           clearStoredIdentity();
           await supabase.auth.signOut({ scope: "local" });
-          alert(insertError.message || "Could not register this device.");
+          alert(`Could not register this device: ${insertError.message}`);
           return;
         }
       } else {
         const { error: updateError } = await supabase
           .from("user_devices")
           .update({ last_login_at: new Date().toISOString() })
-          .eq("id", matchedDevice.id);
+          .eq("id", existingDevice.id);
 
-        console.log("Device update result:", updateError);
+        if (updateError) {
+          console.error("user_devices updateError:", updateError);
+        }
       }
 
       localStorage.setItem("userEmail", user.email || "");
       localStorage.setItem("employee", user.email || "");
       localStorage.setItem("user", JSON.stringify(user));
-
       window.location.assign("/");
     } catch (err) {
       console.error("Login error:", err);
       clearStoredIdentity();
       await supabase.auth.signOut({ scope: "local" });
-      alert(err?.message || "Login failed.");
+      alert(err?.message || "Device security check failed. Please try again or contact Admin.");
     } finally {
       setLoading(false);
     }
@@ -128,32 +124,17 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-white selection:bg-blue-600 selection:text-white">
-      <div
-        className="absolute inset-0 opacity-[0.03] pointer-events-none"
-        style={{
-          backgroundImage: "radial-gradient(#0a2a5e 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-        }}
-      ></div>
+      <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'radial-gradient(#0a2a5e 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
 
-      <form
-        onSubmit={handleLogin}
-        className="relative bg-white p-10 shadow-[0_20px_50px_rgba(0,0,0,0.05)] rounded-[2.5rem] w-full max-w-md space-y-8 border border-slate-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.08)]"
-      >
+      <form onSubmit={handleLogin} className="relative bg-white p-10 shadow-[0_20px_50px_rgba(0,0,0,0.05)] rounded-[2.5rem] w-full max-w-md space-y-8 border border-slate-100 transition-all hover:shadow-[0_30px_60px_rgba(0,0,0,0.08)]">
         <div className="text-center space-y-2">
-          <h2 className="text-4xl font-black text-[#0a2a5e] tracking-tighter uppercase italic">
-            System Login
-          </h2>
-          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.4em]">
-            Maxx Metals
-          </p>
+          <h2 className="text-4xl font-black text-[#0a2a5e] tracking-tighter uppercase italic">System Login</h2>
+          <p className="text-[10px] text-blue-600 font-bold uppercase tracking-[0.4em]">Maxx Metals</p>
         </div>
 
         <div className="space-y-5">
           <div>
-            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
-              Work Email
-            </label>
+            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Work Email</label>
             <input
               type="email"
               value={email}
@@ -165,9 +146,7 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">
-              Password
-            </label>
+            <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2 ml-1">Password</label>
             <input
               type="password"
               value={password}
@@ -199,9 +178,8 @@ export default function Login() {
         <div className="flex flex-col items-center gap-4 pt-2">
           <div className="h-px w-12 bg-slate-100"></div>
           <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest text-center leading-relaxed">
-            Device access control active
-            <br />
-            <span className="text-blue-500/50">Maximum 3 saved devices</span>
+            Multi-Tier Device Protection Active<br/>
+            <span className="text-blue-500/50">Encrypted Fingerprint ID Verification</span>
           </p>
         </div>
       </form>
